@@ -34,8 +34,11 @@
 #include "seq-ts-header.h"
 #include "cdn-rx-buffer.h"
 #include "cdn-tx-buffer.h"
+#include "cdn-header.h"
 #include "ns3/traced-value.h"
 #include "ns3/rtt-estimator.h"
+#include "ns3/cdn-client-subflow.h"
+#include <vector>
 
 namespace ns3 {
 
@@ -80,6 +83,9 @@ public:
    * \param port remote port
    */
   void SetRemote (Address ip, uint16_t port);
+  void PopulateBuffer (CdnHeader cdnhdr);
+  void ProcessAck(Ptr<Packet> p,CdnHeader Ack);
+
 
 protected:
   virtual void DoDispose (void);
@@ -88,24 +94,20 @@ private:
 
   virtual void StartApplication (void);
   virtual void StopApplication (void);
-  void HandleRead (Ptr<Socket> socket);
   void SendWhatPossible(void);
-  uint32_t SendDataPacket(uint32_t seq, uint32_t maxSize);
+  uint32_t SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t maxSize);
   void EstimateRTT (const SeqTsHeader& AckHdr);
-  void DupAck (const SeqTsHeader& t, uint32_t count);
+  void DupAck (const CdnHeader& t, uint32_t count);
   void NewAck (const SequenceNumber32& seq);
   void DoNewAck (const SequenceNumber32& seq);
   uint32_t ChunksInFlight ();
+  void SetSubflowrWnds();
 
-  /**
-   * \brief Send a packet
-   */
-  void Send (uint32_t syntype);
-  /**
-   * \setup the connection
-   */
-  void Connect(void);
-  void ProcessAck(Ptr<Packet> p,SeqTsHeader Ack);
+  
+
+
+
+
   void ConsumeData(void);
   uint32_t AvailableWindow(void);
   uint32_t UnAckDataCount (void);
@@ -115,12 +117,16 @@ private:
   void DoRetransmit ();
   void ReTxTimeout (void);
   void Retransmit (void);
-  bool OutOfRange (uint32_t head, uint32_t tail) const
+  bool OutOfRange (uint32_t head, uint32_t tail) const;
+  Ptr<CdnClientSubflow> GetNextSubflow(uint32_t *w);
 
   uint32_t m_count; //!< Maximum number of packets the application will send
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
-  Ptr<Socket> m_socket; //!< Socket
+  Ptr<Socket> m_socket; //!< the main socket!
+  std::vector<Ptr<Socket> > m_socketList; // !< the list of subflows!
+  std::vector<Ptr<CdnClientSubflow> > m_subflowList; // !< the list of subflowapps.
+  
   Address m_peerAddress; //!< Remote peer address
   uint16_t m_peerPort; //!< Remote peer port
   EventId m_sendEvent; //!< Event to send the next packet

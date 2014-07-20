@@ -37,11 +37,14 @@
 #include "ns3/traced-value.h"
 #include "ns3/rtt-estimator.h"
 
+
 namespace ns3 {
+
+
 
 class Socket;
 class Packet;
-
+class CdnClient;
 /**
  * \ingroup cdnclientserver
  * \class CdnClient
@@ -61,32 +64,20 @@ public:
   CdnClientSubflow ();
 
   virtual ~CdnClientSubflow ();
-
-  /**
-   * \brief set the remote address and port
-   * \param ip remote IPv4 address
-   * \param port remote port
-   */
-  void SetRemote (Ipv4Address ip, uint16_t port);
-  /**
-   * \brief set the remote address and port
-   * \param ip remote IPv6 address
-   * \param port remote port
-   */
-  void SetRemote (Ipv6Address ip, uint16_t port);
-  /**
-   * \brief set the remote address and port
-   * \param ip remote IP address
-   * \param port remote port
-   */
-  void SetRemote (Address ip, uint16_t port);
-
+  void SetClient(Ptr<CdnClient> client);
+  void SetSocket(Ptr<Socket> socket);
+  void GoToStartApplication();
+  void SetMain();
+  int64_t GetRTT(void);
+  bool IsAvailable(uint32_t * w);
+  void AddDataPacket(Ptr<Packet> packet);
+  void SetRwnd(uint32_t m_rWnd);
 protected:
   virtual void DoDispose (void);
 
 private:
-
-  virtual void StartApplication (void);
+  
+  virtual void StartApplication ();
   virtual void StopApplication (void);
   void HandleRead (Ptr<Socket> socket);
   void SendWhatPossible(void);
@@ -96,6 +87,8 @@ private:
   void NewAck (const SequenceNumber32& seq);
   void DoNewAck (const SequenceNumber32& seq);
   uint32_t ChunksInFlight ();
+  Ptr<Packet> GetChunk(uint16_t reqnum, Ptr<Packet> packet);
+  
 
   /**
    * \brief Send a packet
@@ -117,12 +110,13 @@ private:
   void Retransmit (void);
   bool OutOfRange (uint32_t head, uint32_t tail) const;
 
+   
+  Ptr<CdnClient> m_parent; //!<parent connection.
+
   uint32_t m_count; //!< Maximum number of packets the application will send
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
   Ptr<Socket> m_socket; //!< Socket
-  Address m_peerAddress; //!< Remote peer address
-  uint16_t m_peerPort; //!< Remote peer port
   EventId m_sendEvent; //!< Event to send the next packet
 
   uint32_t m_state; /*The state of the connection on each subflow (later you have to make this into a tupled list of some sort), 
@@ -132,7 +126,6 @@ private:
                      * 2 for established 
                      */
   uint32_t m_filesize;
-  uint32_t m_remfromfile;
   CdnRxBuffer  m_rxBuffer;  //Reusing code from TcpRxBuffer. 
   CdnTxBuffer  m_txBuffer;
   TracedValue<uint32_t> m_rWnd;        //!< This should be the size of the receive window at the client!!
@@ -154,7 +147,8 @@ private:
   uint32_t               m_cnCount;         //!< Count of remaining connection retries
   Time                   m_cnTimeout;       //!< Timeout for connection retry
   EventId           m_retxEvent;       //!< Retransmission event
-
+  bool              m_ismain;    //!<indicates whether this is the first subflow?.
+ 
  
 };
 

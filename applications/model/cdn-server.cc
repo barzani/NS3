@@ -214,12 +214,12 @@ void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seq
          Ack.SetTs(seqTs.GetTsInt());
          uint32_t reqNum=CdnHdr.GetReqNumber();
          ToSendPacket=GetChunk(reqNum, ToSendPacket);
-         
+         ToSendPacket->AddHeader(CdnHdr);
          ToSendPacket->AddHeader (Ack);
          
          packetHdr.SetSeq(m_sent);
          ToSendPacket->AddHeader (packetHdr);
-         ToSendPacket->AddHeader(CdnHdr);
+        
          m_sent++;
          m_socket->SendTo (ToSendPacket, 0, from);
          
@@ -247,12 +247,12 @@ void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seq
        {
          ConsumeData();
        }
-  
+     ToSendPacket->AddHeader(ToSendCdnHdr);
      Ack.SetTs(seqTs.GetTsInt());
      ToSendPacket->AddHeader (Ack);
      packetHdr.SetSeq(m_sent);
      ToSendPacket->AddHeader (packetHdr);
-     ToSendPacket->AddHeader(ToSendCdnHdr);
+     
      m_sent++;
      m_socket->SendTo (ToSendPacket, 0, from);
     
@@ -276,12 +276,13 @@ CdnServer::HandleRead (Ptr<Socket> socket)
       if (packet->GetSize () > 0)
         {     
           
-          CdnHeader cdnhdr;
-          packet->RemoveHeader (cdnhdr);
+          
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);
           SeqTsHeader AckHdr;
           packet->RemoveHeader(AckHdr);
+          CdnHeader cdnhdr;
+          packet->RemoveHeader (cdnhdr);
           
           //process the type of packet that was being sent.
           ProcessAndHandleReceivedPacket(cdnhdr, seqTs, AckHdr, packet, from);

@@ -64,15 +64,6 @@ CdnClientSubflow::GetTypeId (void)
                    "The time to wait between packets", TimeValue (Seconds (1.0)),
                    MakeTimeAccessor (&CdnClientSubflow::m_interval),
                    MakeTimeChecker ())
-    .AddAttribute ("RemoteAddress",
-                   "The destination Address of the outbound packets",
-                   AddressValue (),
-                   MakeAddressAccessor (&CdnClientSubflow::m_peerAddress),
-                   MakeAddressChecker ())
-    .AddAttribute ("RemotePort", "The destination port of the outbound packets",
-                   UintegerValue (100),
-                   MakeUintegerAccessor (&CdnClientSubflow::m_peerPort),
-                   MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("PacketSize",
                    "Size of packets generated. The minimum packet size is 12 bytes which is the size of the header carrying the sequence number and the time stamp.",
                    UintegerValue (1024),
@@ -93,7 +84,7 @@ CdnClientSubflow::GetTypeId (void)
   return tid;
 }
 
-CdnClient::CdnClient ()
+  CdnClientSubflow::CdnClientSubflow()
   :m_rtt(0),
    m_inFastRec (false)
 {
@@ -110,77 +101,60 @@ CdnClient::CdnClient ()
   m_cnCount=3;
   m_count=0;
   m_cnTimeout=Seconds(0.2);
+  m_parent=0;
+  m_ismain=false;
 }
 
-CdnClient::~CdnClient ()
+CdnClientSubflow::~CdnClientSubflow ()
 {
   NS_LOG_FUNCTION (this);
 }
 
-void
-CdnClient::SetRemote (Ipv4Address ip, uint16_t port)
-{
-  NS_LOG_FUNCTION (this << ip << port);
-  m_peerAddress = Address(ip);
-  m_peerPort = port;
-}
+
+  void CdnClientSubflow::SetMain(void)
+  {
+    m_ismain=true;
+  }
 
 void
-CdnClient::SetRemote (Ipv6Address ip, uint16_t port)
-{
-  NS_LOG_FUNCTION (this << ip << port);
-  m_peerAddress = Address(ip);
-  m_peerPort = port;
-}
-
-void
-CdnClient::SetRemote (Address ip, uint16_t port)
-{
-  NS_LOG_FUNCTION (this << ip << port);
-  m_peerAddress = ip;
-  m_peerPort = port;
-}
-
-void
-CdnClient::DoDispose (void)
+CdnClientSubflow::DoDispose (void)
 {
   NS_LOG_FUNCTION (this);
   Application::DoDispose ();
 }
 
-void
-CdnClient::StartApplication (void)
+void CdnClientSubflow::SetSocket(Ptr<Socket> socket)
+{
+  m_socket=socket;
+}
+
+  void CdnClientSubflow::SetClient(Ptr<CdnClient> client)
+{
+  m_parent=client;
+}
+void CdnClientSubflow::StartApplication ()
 {
   NS_LOG_FUNCTION (this);
+  NS_ASSERT(m_socket!=0);
 
-  if (m_socket == 0)
-    {
-      TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-      m_socket = Socket::CreateSocket (GetNode (), tid);
-      if (Ipv4Address::IsMatchingType(m_peerAddress) == true)
-        {
-          m_socket->Bind ();
-          m_socket->Connect (InetSocketAddress (Ipv4Address::ConvertFrom(m_peerAddress), m_peerPort));
-          Connect();
-        }
-      else if (Ipv6Address::IsMatchingType(m_peerAddress) == true)
-        {
-          m_socket->Bind6 ();
-          m_socket->Connect (Inet6SocketAddress (Ipv6Address::ConvertFrom(m_peerAddress), m_peerPort));
-        }
-    }
+  
   ObjectFactory rttFactory;
   rttFactory.SetTypeId (m_rttTypeId);
   m_rtt = rttFactory.Create<ns3::RttEstimator> ();
   m_rtt->Reset ();
   InitializeCwnd();
-  m_socket->SetRecvCallback (MakeCallback (&CdnClient::HandleRead, this));
+  m_socket->SetRecvCallback (MakeCallback (&CdnClientSubflow::HandleRead, this));
+  Connect();
   //Not sending anything yet!
   // m_sendEvent = Simulator::Schedule (Seconds (0.0), &CdnClient::Send, this);
 }
 
+  void CdnClientSubflow::GoToStartApplication(void)
+  {
+    StartApplication();
+  }
 void
-CdnClient::StopApplication (void)
+CdnClientSubflow::StopApplication (void)
 {
   NS_LOG_FUNCTION (this);
   Simulator::Cancel (m_sendEvent);
@@ -189,7 +163,7 @@ CdnClient::StopApplication (void)
 
   /*Do not use if you want to piggyback acknowlegements */
 void
-CdnClient::Send (uint32_t syntype)
+CdnClientSubflow::Send (uint32_t syntype)
 {
   NS_LOG_FUNCTION (this);
   NS_ASSERT (m_sendEvent.IsExpired ());
@@ -203,6 +177,12 @@ CdnClient::Send (uint32_t syntype)
       /*The packet is part of the three way handshake => no payload.*/
        p = Create<Packet>(0);
     }
+
+  //create a syn header and add it to the packet
+  CdnHeader cdnhdr;
+  cdnhdr.SetSynType(syntype);
+  p->AddHeader (cdnhdr);
+
   /*Putting in the acknowledgement, we have nothing to acknowledge here so
    * we put a -1 instead to show that this packet is not acknowledging anything.*/
   SeqTsHeader Ack;
@@ -214,21 +194,9 @@ CdnClient::Send (uint32_t syntype)
   seqTs.SetSeq (m_nextTxSequence); 
   p->AddHeader (seqTs);
 
-  //create a syn header and add it to the packet
-  CdnHeader cdnhdr;
-  cdnhdr.SetSynType(syntype);
-  p->AddHeader (cdnhdr);
+  
   
 
-  std::stringstream peerAddressStringStream;
-  if (Ipv4Address::IsMatchingType (m_peerAddress))
-    {
-      peerAddressStringStream << Ipv4Address::ConvertFrom (m_peerAddress);
-    }
-  else if (Ipv6Address::IsMatchingType (m_peerAddress))
-    {
-      peerAddressStringStream << Ipv6Address::ConvertFrom (m_peerAddress);
-    }
 
   //m_rto = m_rtt->RetransmitTimeout ();
   //m_rtt->SentSeq (SequenceNumber32(m_nextTxSequence), 1);
@@ -248,42 +216,57 @@ CdnClient::Send (uint32_t syntype)
           m_cnCount--;
         }
     }
-
-  if ((m_socket->Send (p)) >= 0)
-    {
-     
-      NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
-                                    << peerAddressStringStream.str () << " Uid: "
-                                    << p->GetUid () << " Time: "
-                                    << (Simulator::Now ()).GetSeconds ());
-
-    }
-  else
-    {
-      NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
-                                          << peerAddressStringStream.str ());
-    }
-    if (m_retxEvent.IsExpired () && (syntype==0))
-    { // Retransmit SYN / SYN+ACK / FIN / FIN+ACK to guard against lost
+    
+   m_socket->Send (p);
+ 
+    if (m_retxEvent.IsExpired () && (syntype==0 || syntype==3))
+    { // Retransmit SYN  to guard against lost
       NS_LOG_LOGIC ("Schedule retransmission timeout at time "
                     << Simulator::Now ().GetSeconds () << " to expire at time "
                     << (Simulator::Now () + m_rto.Get ()).GetSeconds ());
-      m_retxEvent = Simulator::Schedule (m_rto, &CdnClient::Send, this, 0);
+      m_retxEvent = Simulator::Schedule (m_rto, &CdnClientSubflow::Send, this, 0);
     }
   /*if (m_nextTxSequence < m_count)
     {
        m_sendEvent = Simulator::Schedule (m_interval, &CdnClient::Send, this);
       }*/
 }
-  void CdnClient::Connect(void)
+  void CdnClientSubflow::Connect(void)
   {
     //first send a syn to the other end and set your current state to Syn-Sent =0.
     m_state=0;
-    m_sendEvent=Simulator::Schedule(Seconds (0.0), &CdnClient::Send, this, 0);
+    if(m_ismain)
+      {
+        m_sendEvent=Simulator::Schedule(Seconds (0.0), &CdnClientSubflow::Send, this, 0);
+      }
+    else
+      {
+	m_sendEvent=Simulator::Schedule(Seconds (0.0), &CdnClientSubflow::Send, this, 3);
+      }
+  }
+
+ int64_t CdnClientSubflow::GetRTT(void)
+  {
+    return m_rtt->GetCurrentEstimate().ToInteger (Time::MS);
+  }
+
+  bool CdnClientSubflow::IsAvailable(uint32_t * w)
+  {
+    
+    *w= AvailableWindow (); // Get available window size
+    if (*w<1 && m_txBuffer.SizeFromSequence (m_nextTxSequence) > *w)
+      {
+        *w=0;
+      }
+    if(w>0)
+      {
+	return true;
+      }
+    return false;
   }
 
 void
-CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
+CdnClientSubflow::EstimateRTT(const SeqTsHeader& AckHdr)
 {
   
   Time nextRtt =  m_rtt->AckSeq (SequenceNumber32(AckHdr.GetSeq ()) );
@@ -295,7 +278,7 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
 
   /*Reads the response from the CdnServer.*/
   void
-CdnClient::HandleRead (Ptr<Socket> socket)
+CdnClientSubflow::HandleRead (Ptr<Socket> socket)
   {
     Ptr<Packet> packet;
     Address from;
@@ -303,14 +286,14 @@ CdnClient::HandleRead (Ptr<Socket> socket)
       {
         if (packet->GetSize () > 0)
         {
-          CdnHeader cdnhdr;
-          packet->RemoveHeader (cdnhdr);
+          
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);
           SeqTsHeader AckHdr;
           packet->RemoveHeader(AckHdr);
           CdnHeader ToSendCdnHdr;
-
+          CdnHeader cdnhdr;
+          packet->RemoveHeader (cdnhdr);
 
           switch(cdnhdr.GetSynType())
             {
@@ -327,17 +310,7 @@ CdnClient::HandleRead (Ptr<Socket> socket)
                     m_txBuffer.SetHeadSequence (m_nextTxSequence);
                     /*this packet does not contain an ACK so we don't need to process it.*/
                     //ProcessAck(AckHdr);
-                    m_filesize=cdnhdr.GetFileSize();
-                    m_remfromfile=m_filesize;
-                    uint32_t i;
-                    /*We add to the buffer the number of bytes that need to be requested.*/
-                    uint32_t m_lastDataAdded=std::min(m_filesize,m_txBuffer.Available());
-                    for (i=1; i<=m_lastDataAdded; i++)
-                      {
-                        //I have setup a tx buffer with the number of the packets that I need!
-                        m_txBuffer.Add (i);
-                        m_remfromfile--;
-                      }
+		    m_parent->PopulateBuffer(cdnhdr);
                   }
                 break;
               }
@@ -361,8 +334,8 @@ CdnClient::HandleRead (Ptr<Socket> socket)
                         return;
                      }
                     ProcessAck(packet,AckHdr);
-                    
-                    m_rWnd--;
+                    //remember to send up the packet to the upper layer!.
+                    m_parent->ProcessAck(packet,cdnhdr);
                   }
                 return;
 
@@ -393,13 +366,14 @@ CdnClient::HandleRead (Ptr<Socket> socket)
            {
               ConsumeData();
            }
+	   ToSendCdnHdr.SetSynType(2);  
+           ToSendPacket->AddHeader(ToSendCdnHdr);
            Ack.SetTs(seqTs.GetTsInt());
            ToSendPacket->AddHeader (Ack);
            SeqTsHeader packetHdr;
            packetHdr.SetSeq(-1);
-           ToSendCdnHdr.SetSynType(2);  
            ToSendPacket->AddHeader (packetHdr);
-           ToSendPacket->AddHeader(ToSendCdnHdr);
+          
            //m_rto = m_rtt->RetransmitTimeout ();
            m_socket->SendTo (ToSendPacket, 0, from); 
         }
@@ -407,13 +381,13 @@ CdnClient::HandleRead (Ptr<Socket> socket)
       }
     if(m_rxBuffer.NextRxSequence ()>m_filesize)
       {
-        std::cout<<"Finished file transmit!\n";
+        std::cout<<"Finished file transmit! in subflow!\n";
       }
     else
       {
             if(m_txBuffer.Size () == 0)
               {
-                std::cout<<"finished file transmit\n";
+                std::cout<<"finished file transmit since nothing was in tx_Buffer\n";
               }
             else
               {
@@ -425,7 +399,7 @@ CdnClient::HandleRead (Ptr<Socket> socket)
   /* This function does: requests the next packet.
    * This is sending requests one at a time, rather than making a contigues request.
    */
-  void CdnClient::SendWhatPossible()
+  void CdnClientSubflow::SendWhatPossible()
   {
     if(m_nextTxSequence == 0)
       {
@@ -451,8 +425,19 @@ CdnClient::HandleRead (Ptr<Socket> socket)
       
   }
   }
+  Ptr<Packet> CdnClientSubflow::GetChunk(uint16_t reqnum, Ptr<Packet> packet)
+  {
+
+
+    packet = m_txBuffer.CopyFromSequence (1, reqnum);
+    return packet;
+  }
+void CdnClientSubflow::SetRwnd(uint32_t rWnd)
+  {
+    m_rWnd=rWnd;
+  }
 /* I think this is also wrong. */
-  uint32_t CdnClient::SendDataPacket(uint32_t seq, uint32_t maxSize)
+  uint32_t CdnClientSubflow::SendDataPacket(uint32_t seq, uint32_t maxSize)
   {
    
     uint32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
@@ -464,25 +449,23 @@ CdnClient::HandleRead (Ptr<Socket> socket)
    
     /*Packet header containing the sequence number and time stamp.*/
     SeqTsHeader seqTs; 
-  //create a syn header and add it to the packet
-    CdnHeader cdnhdr;
+   
     if (m_retxEvent.IsExpired () )
     { // Schedule retransmit
       m_rto = m_rtt->RetransmitTimeout ();
       NS_LOG_LOGIC (this << " SendDataPacket Schedule ReTxTimeout at time " <<
                     Simulator::Now ().GetSeconds () << " to expire at time " <<
                     (Simulator::Now () + m_rto.Get ()).GetSeconds () );
-      m_retxEvent = Simulator::Schedule (m_rto, &CdnClient::ReTxTimeout, this);
+      m_retxEvent = Simulator::Schedule (m_rto, &CdnClientSubflow::ReTxTimeout, this);
     }
     for(uint32_t i=0; i<num; ++i)
-      {    
-        p = Create<Packet>(0);
+      {  
+	//This is where I have a problem, i have to extract the packet from the buffer instead of sending an empty one!
+        p = GetChunk(seq, p);
         p->AddHeader (Ack);
         seqTs.SetSeq (seq); 
         p->AddHeader (seqTs);
-        cdnhdr.SetSynType(4);
-        cdnhdr.SetReqNumber(seq);
-        p->AddHeader (cdnhdr);
+        
         //m_rto = m_rtt->RetransmitTimeout ();
         m_rtt->SentSeq (SequenceNumber32(seq), 1);
         m_highTxMark= std::max (SequenceNumber32(seq + 1), m_highTxMark.Get ());
@@ -495,26 +478,27 @@ CdnClient::HandleRead (Ptr<Socket> socket)
   
     return 0;
   }
-  uint32_t CdnClient::AvailableWindow(void)
+  uint32_t CdnClientSubflow::AvailableWindow(void)
   {
   uint32_t unack = UnAckDataCount (); // Number of outstanding bytes
   uint32_t win = Window (); // Number of bytes allowed to be outstanding
   NS_LOG_LOGIC ("UnAckCount=" << unack << ", Win=" << win);
   return (win < unack) ? 0 : (win - unack);
   }
-  uint32_t CdnClient::Window (void)
+  
+  uint32_t CdnClientSubflow::Window (void)
   {
    return std::min (m_rWnd.Get (), m_cWnd.Get ());;
   }
   uint32_t
- CdnClient::UnAckDataCount (void)
+ CdnClientSubflow::UnAckDataCount (void)
   {
    return m_nextTxSequence.Get () - m_txBuffer.HeadSequence ();  
   }
-  void CdnClient::ConsumeData(void)
+  void CdnClientSubflow::ConsumeData(void)
   {
   }
-void CdnClient::ProcessAck(Ptr<Packet> p, SeqTsHeader Ack)
+void CdnClientSubflow::ProcessAck(Ptr<Packet> p, SeqTsHeader Ack)
   {
     /*First have to check if the ack is in sequence!
      * will have to change this later, to reflect multiple subflows.*/
@@ -560,7 +544,7 @@ void CdnClient::ProcessAck(Ptr<Packet> p, SeqTsHeader Ack)
 /* Cut cwnd and enter fast recovery mode upon triple dupack
  * Since all our chunks are at the same size we can modify the current
  * protocol implementation.*/
-void CdnClient::DupAck (const SeqTsHeader& t, uint32_t count)
+void CdnClientSubflow::DupAck (const SeqTsHeader& t, uint32_t count)
 {
    NS_LOG_FUNCTION (this << count);
   if (count == m_retxThresh && !m_inFastRec)
@@ -586,7 +570,7 @@ void CdnClient::DupAck (const SeqTsHeader& t, uint32_t count)
       m_nextTxSequence += 1;                    // Advance next tx sequence
     };
 }
-void CdnClient::NewAck (const SequenceNumber32& seq)
+void CdnClientSubflow::NewAck (const SequenceNumber32& seq)
 {
         uint32_t ack=seq.GetValue();
         if(ack==(m_filesize+1))
@@ -602,7 +586,7 @@ void CdnClient::NewAck (const SequenceNumber32& seq)
       NS_LOG_LOGIC (this << " Schedule ReTxTimeout at time " <<
                     Simulator::Now ().GetSeconds () << " to expire at time " <<
                     (Simulator::Now () + m_rto.Get ()).GetSeconds ());
-      m_retxEvent = Simulator::Schedule (m_rto, &CdnClient::ReTxTimeout, this);
+      m_retxEvent = Simulator::Schedule (m_rto, &CdnClientSubflow::ReTxTimeout, this);
    if (m_inFastRec && seq < m_recover)
     { // Partial ACK, partial window deflation (RFC2582 sec.3 bullet #5 paragraph 3)
       m_cWnd -= seq - SequenceNumber32(m_txBuffer.HeadSequence ());
@@ -636,26 +620,14 @@ void CdnClient::NewAck (const SequenceNumber32& seq)
   // Complete newAck processing
   DoNewAck (seq);
 }
-void CdnClient::DoNewAck (const SequenceNumber32& seq)
+void CdnClientSubflow::DoNewAck (const SequenceNumber32& seq)
 {
   /* Note that since the receive window is local, 
    * we don't need to send probes in 
    * our implementation.*/
   uint32_t ack=seq.GetValue();
   m_txBuffer.DiscardNumUpTo (ack);
-  if (m_txBuffer.Available ()> 0)
-    {
-      uint32_t i;
-      /*We add to the buffer the number of bytes that need to be requested.*/
-      uint32_t m_lastDataAdded=std::min(m_remfromfile,m_txBuffer.Available());
-      for (i=0; i<m_lastDataAdded; i++)
-      {
-         //I have setup a tx buffer with the number of the packets that I need!
-         m_txBuffer.Add (i);
-         m_remfromfile--;
-      }
-    
-    }
+
   if (ack > m_nextTxSequence)
     {
       m_nextTxSequence = ack; // If advanced
@@ -671,12 +643,12 @@ void CdnClient::DoNewAck (const SequenceNumber32& seq)
 SendWhatPossible();
   
 }
-uint32_t CdnClient::ChunksInFlight ()
+uint32_t CdnClientSubflow::ChunksInFlight ()
 {
   NS_LOG_FUNCTION (this);
   return m_highTxMark.Get () - SequenceNumber32(m_txBuffer.HeadSequence ());
 }
-void  CdnClient::InitializeCwnd (void)
+void  CdnClientSubflow::InitializeCwnd (void)
 {
   /*
    * Initialize congestion window, default to 1 MSS (RFC2001, sec.1) and must
@@ -685,12 +657,12 @@ void  CdnClient::InitializeCwnd (void)
    */
   m_cWnd = m_initialCWnd;
 }
-void CdnClient::SetInitialCwnd (uint32_t cwnd)
+void CdnClientSubflow::SetInitialCwnd (uint32_t cwnd)
 {
   m_initialCWnd = cwnd;
 }
 
-void CdnClient::DoRetransmit ()
+void CdnClientSubflow::DoRetransmit ()
 {
   if (m_state == 0)
     {
@@ -713,21 +685,18 @@ void CdnClient::DoRetransmit ()
   
 }
 void
-CdnClient::Retransmit (void)
+CdnClientSubflow::Retransmit (void)
 {
   NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC (this << " ReTxTimeout Expired at time " << Simulator::Now ().GetSeconds ());
   m_inFastRec = false;
   // If all data are received (non-closing socket and nothing to send), just return
-  if (SequenceNumber32(m_txBuffer.HeadSequence () )
->= m_highTxMark) return;
+  if (SequenceNumber32(m_txBuffer.HeadSequence () )>= m_highTxMark) return;
 
   // According to RFC2581 sec.3.1, upon RTO, ssthresh is set to half of flight
   // size and cwnd is set to 1*MSS, then the lost packet is retransmitted and
   // TCP back to slow start
-  m_ssThresh = std::max ( (uint32_t
-
-)2, ChunksInFlight () / 2);
+  m_ssThresh = std::max ( (uint32_t)2, ChunksInFlight () / 2);
   m_cWnd = 1;
   m_nextTxSequence = m_txBuffer.HeadSequence (); // Restart from highest Ack
   NS_LOG_INFO ("RTO. Reset cwnd to " << m_cWnd <<
@@ -735,7 +704,7 @@ CdnClient::Retransmit (void)
   m_rtt->IncreaseMultiplier ();             // Double the next RTO
   DoRetransmit ();                          // Retransmit the packet
 }
-void CdnClient::ReTxTimeout (void)
+void CdnClientSubflow::ReTxTimeout (void)
 {
   /* NS_LOG_FUNCTION (this);
   NS_LOG_LOGIC (this << " ReTxTimeout Expired at time " << Simulator::Now ().GetSeconds ());
@@ -748,15 +717,20 @@ void CdnClient::ReTxTimeout (void)
   if (m_state <= ESTABLISHED && m_txBuffer.HeadSequence () >= m_highTxMark)
     {
       return;
-    }
+      }*/
 
-    Retransmit ();*/
+    Retransmit ();
 }
- bool CdnClient::OutOfRange (uint32_t head, uint32_t tail) const
+ bool CdnClientSubflow::OutOfRange (uint32_t head, uint32_t tail) const
 {
 
   // In all other cases, check if the sequence number is in range
   return (tail < m_rxBuffer.NextRxSequence () || m_rxBuffer.MaxRxSequence () <= head);
+}
+
+void CdnClientSubflow::AddDataPacket(Ptr<Packet> packet)
+{
+  m_txBuffer.Add(packet);
 }
 
 } // Namespace ns3
