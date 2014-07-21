@@ -214,6 +214,7 @@ void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seq
          Ack.SetTs(seqTs.GetTsInt());
          uint32_t reqNum=CdnHdr.GetReqNumber();
          ToSendPacket=GetChunk(reqNum, ToSendPacket);
+
          ToSendPacket->AddHeader(CdnHdr);
          ToSendPacket->AddHeader (Ack);
          

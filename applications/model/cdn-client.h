@@ -85,7 +85,7 @@ public:
   void SetRemote (Address ip, uint16_t port);
   void PopulateBuffer (CdnHeader cdnhdr);
   void ProcessAck(Ptr<Packet> p,CdnHeader Ack);
-
+  void SendWhatPossible(void);
 
 protected:
   virtual void DoDispose (void);
@@ -94,7 +94,7 @@ private:
 
   virtual void StartApplication (void);
   virtual void StopApplication (void);
-  void SendWhatPossible(void);
+  
   uint32_t SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t maxSize);
   void EstimateRTT (const SeqTsHeader& AckHdr);
   void DupAck (const CdnHeader& t, uint32_t count);

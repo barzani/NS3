@@ -129,7 +129,7 @@ public:
   void DiscardUpTo (const uint32_t& seq);
   void DiscardNumUpTo (const uint32_t& seq);
   uint32_t ReturnMaxPossible(uint32_t numBytes, const uint32_t& seq);
-
+  void SetSize(uint32_t size);
 private:
   /// container for data stored in the buffer
   typedef std::list<Ptr<Packet> >::iterator BufIterator;
@@ -137,6 +137,7 @@ private:
 
   TracedValue<uint32_t> m_firstByteSeq; //!< Sequence number of the first byte in data (SND.UNA)
   uint32_t m_size;                              //!< Number of data bytes
+  uint32_t m_size_num;
   uint32_t m_maxBuffer;                         //!< Max number of data bytes in buffer (SND.WND)
   std::list<Ptr<Packet> > m_data;               //!< Corresponding data (may be null)
   uint32_t m_packetsize;
