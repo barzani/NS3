@@ -299,6 +299,36 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
    
   }
 
+  Ptr<CdnClientSubflow> CdnClient::GetSubflowForRetransmit(uint32_t seq)
+  {
+       NS_LOG_FUNCTION (this);
+    std::vector<Ptr<CdnClientSubflow> >::iterator it;
+    int64_t min_time_to_peer = 4294967295;
+    Ptr<CdnClientSubflow> bestsubflow=NULL;
+    uint32_t tw;
+    for(it=m_subflowList.begin(); it!=m_subflowList.end(); it++)
+      {
+        if((*it)==subflowmap[seq])
+          continue;
+        
+        if(!(*it)->IsAvailable(&tw))
+          continue;
+        
+        if((*it)->GetRTT()<min_time_to_peer)
+          {
+            min_time_to_peer=(*it)->GetRTT();
+            bestsubflow=(*it);
+          }
+        
+      }
+    if(bestsubflow==NULL)
+      {
+        bestsubflow=subflowmap[seq];
+      }
+    return bestsubflow;
+    
+  }
+
 uint32_t CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t maxSize)
   {
    NS_LOG_FUNCTION (this);
@@ -318,8 +348,7 @@ uint32_t CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, 
       NS_LOG_LOGIC (this << " SendDataPacket Schedule ReTxTimeout at time " <<
                     Simulator::Now ().GetSeconds () << " to expire at time " <<
                     (Simulator::Now () + m_rto.Get ()).GetSeconds () );
-      m_retxEvent = Simulator::Schedule (m_rto, &CdnClient
-::ReTxTimeout, this);
+      m_retxEvent = Simulator::Schedule (m_rto, &CdnClient::ReTxTimeout, this);
     }
 
     //std::cout<<"this is the value of num "<< num <<"this is seq "<<seq<< "max size is "<<maxSize<<"\n";
@@ -332,7 +361,7 @@ uint32_t CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, 
         p->AddHeader (cdnhdr);
         m_highTxMark= std::max (SequenceNumber32(seq + 1), m_highTxMark.Get ());    
         subflow->AddDataPacket (p);   
-      
+        subflowmap.insert( std::pair<uint32_t, Ptr<CdnClientSubflow> >(seq,subflow) );
       }
   
     return 0;
@@ -360,11 +389,11 @@ void CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
         {
           SeqTsHeader tempack;
           tempack.SetSeq(Ack.GetReqNumber());
-        
+     
          if (!m_rxBuffer.Add (p, tempack))
           { // Insert failed: No data or RX buffer full
-         
-           NS_ASSERT(0);
+            std::cout<<"WARNING:buffer full! or no data\n";
+  
            return;
           }
       
@@ -472,7 +501,10 @@ void CdnClient::DoNewAck (const SequenceNumber32& seq)
    * our implementation.*/
   uint32_t ack=seq.GetValue();
   m_txBuffer.DiscardNumUpTo (ack);
-  
+  for(uint32_t i=m_txBuffer.HeadSequence(); i<ack; i++)
+    {
+      subflowmap.erase(i);
+    }
   if (m_txBuffer.Available ()> 0)
     {
       
@@ -529,8 +561,8 @@ void CdnClient::SetInitialCwnd (uint32_t cwnd)
 void CdnClient::DoRetransmit ()
 {
   NS_LOG_FUNCTION (this);
-  uint32_t w;
-  Ptr<CdnClientSubflow> subflow=GetNextSubflow(&w);
+  //Ptr<CdnClientSubflow> subflow=GetNextSubflow(&w);
+  Ptr<CdnClientSubflow> subflow=GetSubflowForRetransmit(m_txBuffer.HeadSequence());
   SendDataPacket (subflow, m_txBuffer.HeadSequence (), 1);
   // In case of RTO, advance m_nextTxSequence
   m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1);

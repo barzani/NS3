@@ -150,13 +150,16 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
                            << ", when NextRxSeq=" << m_nextRxSeq << ", buffsize=" << m_size);
 
   // Trim packet to fit Rx window specification
+
   if (headSeq < m_nextRxSeq) headSeq = m_nextRxSeq;
+ 
   if (m_data.size ())
     {
       uint32_t maxSeq = m_data.begin ()->first + (m_maxBuffer);
       if (maxSeq < tailSeq) tailSeq = maxSeq;
       if (tailSeq < headSeq) headSeq = tailSeq;
     }
+  
   // Remove overlapped bytes from packet
   BufIterator i = m_data.begin ();
   while (i != m_data.end () && i->first <= tailSeq)
@@ -164,19 +167,23 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
       uint32_t lastByteSeq = i->first + 1;
       if (lastByteSeq > headSeq)
         {
-          if (i->first > headSeq && lastByteSeq < tailSeq)
+          if (i->first >= headSeq && lastByteSeq <= tailSeq)
             { // Rare case: Existing packet is embedded fully in the new packet
               m_size -= 1;
               m_data.erase (i++);
+              
               continue;
             }
-          if (i->first <= headSeq)
+          if (i->first < headSeq)
             { // Incoming head is overlapped
+            
               headSeq = lastByteSeq;
+              
             }
-          if (lastByteSeq >= tailSeq)
+          if (lastByteSeq >tailSeq)
             { // Incoming tail is overlapped
               tailSeq = i->first;
+              
             }
         }
       ++i;
@@ -184,15 +191,18 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
   // We now know how much we are going to store, trim the packet
   if (headSeq >= tailSeq)
     {
+     
       NS_LOG_LOGIC ("Nothing to buffer");
       return false; // Nothing to buffer anyway
     }
   else
     {
-
+     
       uint32_t length = tailSeq - headSeq;
+      
       if(length!=1)
         {
+            
           return false;
         }
     }
@@ -220,6 +230,7 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
     { // Account for the FIN packet
       ++m_nextRxSeq;
     };
+ 
   return true;
 }
 

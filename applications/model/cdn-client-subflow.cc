@@ -493,10 +493,10 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
       {  
 	//This is where I have a problem, i have to extract the packet from the buffer instead of sending an empty one!
         p = GetChunk(seq, p);
-        CdnHeader cdnhdr;
-        p->RemoveHeader(cdnhdr);
-        //   std::cout<<"this is the packet being sent from  " <<this <<"with seq number "<< cdnhdr.GetReqNumber() << "\n";
-        p->AddHeader(cdnhdr);
+        //CdnHeader cdnhdr;
+        //p->RemoveHeader(cdnhdr);
+        // std::cout<<"this is the packet being sent from  " <<this <<"with seq number "<< cdnhdr.GetReqNumber() << "\n";
+        //p->AddHeader(cdnhdr);
         p->AddHeader (Ack);
         seqTs.SetSeq (seq); 
         p->AddHeader (seqTs);
@@ -710,6 +710,7 @@ void CdnClientSubflow::SetInitialCwnd (uint32_t cwnd)
 
 void CdnClientSubflow::DoRetransmit ()
 {
+
    NS_LOG_FUNCTION (this);
   if (m_state == 0)
     {
@@ -779,10 +780,7 @@ void CdnClientSubflow::ReTxTimeout (void)
 void CdnClientSubflow::AddDataPacket(Ptr<Packet> packet)
 {
  
-  CdnHeader cdnhdr;
-        packet->RemoveHeader(cdnhdr);
-        //  std::cout<<"the packet was added to "<< this <<"with req number " << cdnhdr.GetReqNumber() << "\n";
-        packet->AddHeader(cdnhdr);
+  
    NS_LOG_FUNCTION (this);
    NS_ASSERT(m_count<m_filesize);
    m_count++;
