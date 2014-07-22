@@ -75,12 +75,22 @@ CdnServer::CdnServer ()
   m_sent=0;
   m_filesize=30;
   m_txBuffer.SetMaxBufferSize (m_filesize);
+  m_ismain=false;
 }
 
 CdnServer::~CdnServer ()
 {
   NS_LOG_FUNCTION (this);
 }
+
+void
+CdnServer::AddRemote (Address ip, uint16_t port)
+{
+  NS_LOG_FUNCTION (this << ip << port);
+  m_peerAddress.push_back(ip);
+  m_peerPort.push_back(port);
+}
+
 
 uint16_t
 CdnServer::GetPacketWindowSize () const
@@ -89,6 +99,10 @@ CdnServer::GetPacketWindowSize () const
   return m_lossCounter.GetBitMapSize ();
 }
 
+  void CdnServer::SetMain()
+  {
+    m_ismain=true;
+  }
 void
 CdnServer::SetPacketWindowSize (uint16_t size)
 {
@@ -120,14 +134,14 @@ CdnServer::DoDispose (void)
 void
 CdnServer::StartApplication (void)
 {
+  std::cout<<"got in here this is m_ismain "<<m_ismain<<"this is this "<<this<<"\n";
   NS_LOG_FUNCTION (this);
 
   if (m_socket == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
       m_socket = Socket::CreateSocket (GetNode (), tid);
-      InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (),
-                                                   m_port);
+      InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (),m_port);
       m_socket->Bind (local);
     }
 
@@ -161,7 +175,7 @@ void CdnServer::ProcessAck(SeqTsHeader RecAck)
 }
 void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seqTs, SeqTsHeader RecAck, Ptr<Packet> packet, Address from)
 {
-   
+
    CdnHeader ToSendCdnHdr;
    SeqTsHeader packetHdr;
    switch(CdnHdr.GetSynType())
@@ -192,6 +206,24 @@ void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seq
          ProcessAck(RecAck);
          return;
        }
+       case 3:
+         {
+      
+           if(m_state==0)
+             {
+              
+               ToSendCdnHdr.SetSynType(1);
+               ToSendCdnHdr.SetFileSize(m_filesize);
+               PopulateBuffer();
+               m_state=1;
+              
+             }
+           else
+               {
+               ToSendCdnHdr.SetSynType(4);
+               }
+           break;
+         }
      case 4:
        {
          
@@ -238,16 +270,26 @@ void CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seq
      //inspired by TcpSocketBase, receiving data.
      uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
      SeqTsHeader Ack;
+     
      if (!m_rxBuffer.Add (packet, seqTs))
       { // Insert failed: No data or RX buffer full
         Ack.SetSeq(m_rxBuffer.NextRxSequence ());
       }
-   
+     
      Ack.SetSeq(m_rxBuffer.NextRxSequence ());
+    
      if (expectedSeq < m_rxBuffer.NextRxSequence ())
        {
          ConsumeData();
        }
+
+     if(m_ismain)
+       {
+      
+         ToSendCdnHdr.SetDestination(m_peerAddress.front());
+         ToSendCdnHdr.SetPort(m_peerPort.front());
+       }
+   
      ToSendPacket->AddHeader(ToSendCdnHdr);
      Ack.SetTs(seqTs.GetTsInt());
      ToSendPacket->AddHeader (Ack);

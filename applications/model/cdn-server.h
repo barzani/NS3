@@ -83,6 +83,8 @@ public:
    */
   void SetPacketWindowSize (uint16_t size);
   void ProcessAndHandleReceivedPacket(CdnHeader cdnhdr, SeqTsHeader seqTs, SeqTsHeader AckHdr, Ptr<Packet> packet, Address from);
+  void SetMain();
+  void AddRemote (Address ip, uint16_t port);
 protected:
   virtual void DoDispose (void);
 
@@ -119,6 +121,9 @@ private:
   CdnTxBuffer  m_txBuffer;
   uint16_t m_chunksize;
   uint32_t m_filesize;
+  bool m_ismain;
+  std::vector<Address> m_peerAddress; //!< Remote peer address
+  std::vector<uint16_t> m_peerPort;
   
 };
 

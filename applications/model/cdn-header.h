@@ -23,7 +23,7 @@
 
 #include "ns3/header.h"
 #include "cdn-rx-buffer.h"
-
+#include "ns3/ipv4-address.h"
 
 namespace ns3 {
 
@@ -58,6 +58,10 @@ public:
   virtual uint32_t Deserialize (Buffer::Iterator start);
   void SetReqNumber(uint32_t num);
   uint32_t GetReqNumber(void);
+  void SetDestination (Address dst);
+  Address GetDestination (void) const;
+  void SetPort(uint16_t port);
+  uint16_t GetPort();
 
 private:
   uint32_t m_syn; //Type of the packet
@@ -69,6 +73,8 @@ private:
   uint32_t m_filesize;
   uint32_t m_req_number;
   EventId           m_retxEvent;       //!< Retransmission event
+  Ipv4Address m_destination; //!< destination address
+  uint16_t m_port;
 
 };
 

@@ -246,6 +246,7 @@ CdnClientSubflow::Send (uint32_t syntype)
       }
     else
       {
+      
 	m_sendEvent=Simulator::Schedule(Seconds (0.0), &CdnClientSubflow::Send, this, 3);
       }
   }
@@ -258,7 +259,12 @@ CdnClientSubflow::Send (uint32_t syntype)
 
   bool CdnClientSubflow::IsAvailable(uint32_t * w)
   {
-     
+    if(m_state==0)
+      {
+        *w=0;
+        return false;
+      }
+
     *w= AvailableWindow (); // Get available window size
     if (*w<1 && m_txBuffer.SizeFromSequence (m_nextTxSequence) > *w)
       {
@@ -311,6 +317,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                  * In its response.*/
                 if(m_state==0)
                   {
+                    
 		    m_filesize=cdnhdr.GetFileSize();
                     m_state=2;
                     m_highTxMark=SequenceNumber32(++m_nextTxSequence);
@@ -318,7 +325,11 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                     m_txBuffer.SetHeadSequence (m_nextTxSequence);
                     /*this packet does not contain an ACK so we don't need to process it.*/
                     //ProcessAck(AckHdr);
-		    m_parent->PopulateBuffer(cdnhdr);
+                    if(m_ismain)
+                      {
+                        std::cout<<"this is the main thread "<< this <<"\n";
+		         m_parent->PopulateBuffer(cdnhdr);
+                      }
                   }
                 break;
               }
@@ -397,7 +408,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
       {
             if(m_txBuffer.Size () == 0)
               {
-                std::cout<<"finished file transmit since nothing was in tx_Buffer\n";
+                std::cout<<"nothing to send\n";
               }
             else
               {
@@ -416,19 +427,23 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
       {
         m_nextTxSequence += 1;   
       }
-
+    
     while (m_txBuffer.SizeFromSequence (m_nextTxSequence))
     {
+      
       uint32_t w = AvailableWindow (); // Get available window size
       uint32_t packetsize=1;
       uint32_t nPacketsSent=0;
-
+  
+     
       // Stop sending if we need to wait for a larger Tx window (prevent silly window syndrome)
       if (w<1 && m_txBuffer.SizeFromSequence (m_nextTxSequence) > w)
         {
           break; // No more
         }
+      
       uint32_t s = std::min(w, packetsize);  // Send no more than window
+
       /*we are */
       SendDataPacket (m_nextTxSequence, s);
       nPacketsSent++;                             // Count sent this loop
@@ -457,10 +472,9 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
     NS_LOG_FUNCTION (this);
       
     uint32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
-    std::cout<<"*******\n";
-    std::cout<<"the sequence number is "<<seq<< "the value of num is "<< num<<"\n";
+   
     Ptr<Packet> p;
-    
+   
     SeqTsHeader Ack;
     Ack.SetSeq(-1);
    
@@ -481,7 +495,7 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
         p = GetChunk(seq, p);
         CdnHeader cdnhdr;
         p->RemoveHeader(cdnhdr);
-        std::cout<<"the header is "<< cdnhdr.GetReqNumber()<<"\n";
+        //   std::cout<<"this is the packet being sent from  " <<this <<"with seq number "<< cdnhdr.GetReqNumber() << "\n";
         p->AddHeader(cdnhdr);
         p->AddHeader (Ack);
         seqTs.SetSeq (seq); 
@@ -765,13 +779,19 @@ void CdnClientSubflow::ReTxTimeout (void)
 void CdnClientSubflow::AddDataPacket(Ptr<Packet> packet)
 {
  
+  CdnHeader cdnhdr;
+        packet->RemoveHeader(cdnhdr);
+        //  std::cout<<"the packet was added to "<< this <<"with req number " << cdnhdr.GetReqNumber() << "\n";
+        packet->AddHeader(cdnhdr);
    NS_LOG_FUNCTION (this);
-
    NS_ASSERT(m_count<m_filesize);
    m_count++;
    m_txBuffer.SetSize(packet->GetSize());
+   
    m_txBuffer.Add(packet);
    m_txBuffer.Add(m_count);
+
+   SendWhatPossible();
 }
 
 } // Namespace ns3

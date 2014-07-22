@@ -89,6 +89,7 @@ public:
    * \returns available capacity in this Tx window
    */
   uint32_t Available (void) const;
+    uint32_t AvailableNum (void) const;
 
   /**
    * Append a data packet to the end of the buffer

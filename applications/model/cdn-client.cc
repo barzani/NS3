@@ -171,6 +171,7 @@ CdnClient::StartApplication (void)
           m_socket->Connect (Inet6SocketAddress (Ipv6Address::ConvertFrom(m_peerAddress), m_peerPort));
         }
     }
+
   m_socketList.push_back(m_socket);
   Ptr<CdnClientSubflow> subflow=CreateObject<CdnClientSubflow>();
   subflow->SetSocket(m_socket);
@@ -182,6 +183,27 @@ CdnClient::StartApplication (void)
   //Not sending anything yet!
   // m_sendEvent = Simulator::Schedule (Seconds (0.0), &CdnClient::Send, this);
 }
+  void CdnClient::AddNewSubflow(CdnHeader ack)
+  {
+    Ptr<Socket> tempSock;
+        TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+    m_socketList.push_back(Socket::CreateSocket (GetNode (), tid));
+ 
+     tempSock = m_socketList.back();
+      if (Ipv4Address::IsMatchingType(ack.GetDestination()) == true)
+        {
+          tempSock->Bind ();
+          tempSock->Connect (InetSocketAddress (Ipv4Address::ConvertFrom(ack.GetDestination()),ack.GetPort()));
+        }
+     
+      m_subflowList.push_back(CreateObject<CdnClientSubflow>());
+      Ptr<CdnClientSubflow> subflow=m_subflowList.back();
+      subflow->SetSocket(tempSock);
+      subflow->SetClient(this);
+
+     
+     subflow->GoToStartApplication();
+  }
 
 void
 CdnClient::StopApplication (void)
@@ -245,7 +267,7 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
         m_nextTxSequence += 1;
       
       }
-    
+
     while (m_txBuffer.SizeFromSequence (m_nextTxSequence))
     {
       uint32_t w;
@@ -268,7 +290,7 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
         {
           nPacketsSent++;                             // Count sent this loop
           m_nextTxSequence += 1;                     // Advance next tx sequence
-          std::cout<<"m_nextTxSequence "<<m_nextTxSequence << "\n";
+
 
         }
 
@@ -281,15 +303,15 @@ uint32_t CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, 
   {
    NS_LOG_FUNCTION (this);
    int32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
-   if(num==-1)
+   if(num==-1 || num == 0)
      {
        return 1;
      }
-   std::cout<<"sending the packet with sequence number "<<seq <<"\n";
+   
     Ptr<Packet> p;
   //create a syn header and add it to the packet
     CdnHeader cdnhdr;
-  
+    
     if (m_retxEvent.IsExpired () )
     { // Schedule retransmit
       
@@ -324,10 +346,15 @@ uint32_t CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, 
   void CdnClient::ConsumeData(void)
   {
   }
+
 void CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   {
     NS_LOG_FUNCTION (this);
    
+    if(Ack.GetPort()!=0)
+      {
+        AddNewSubflow(Ack);
+      }
     //This section generates a 'global' sequence number!.
      if(p->GetSize()>0)
         {
@@ -342,8 +369,7 @@ void CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
           }
       
           Ack.SetReqNumber(m_rxBuffer.NextRxSequence ());
-       
-
+          // std::cout<<"got an ack for " << Ack.GetReqNumber()<<"\n";
         }
     /*First have to check if the ack is in sequence!
      * will have to change this later, to reflect multiple subflows.*/
@@ -364,7 +390,7 @@ void CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
     }
     else if (Ack.GetReqNumber () > m_txBuffer.HeadSequence ())
     { // Case 3: New ACK, reset m_dupAckCount and update m_txBuffer
-   
+  
       NS_LOG_LOGIC ("New ack of " << Ack.GetReqNumber ());
         }
       uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
@@ -439,24 +465,29 @@ void CdnClient::NewAck (const SequenceNumber32& seq)
 }
 void CdnClient::DoNewAck (const SequenceNumber32& seq)
 {
+ 
   NS_LOG_FUNCTION (this);
   /* Note that since the receive window is local, 
    * we don't need to send probes in 
    * our implementation.*/
   uint32_t ack=seq.GetValue();
   m_txBuffer.DiscardNumUpTo (ack);
+  
   if (m_txBuffer.Available ()> 0)
     {
+      
       uint32_t i;
       /*We add to the buffer the number of bytes that need to be requested.*/
       uint32_t m_lastDataAdded=std::min(m_remfromfile,m_txBuffer.Available());
       for (i=0; i<m_lastDataAdded; i++)
       {
          //I have setup a tx buffer with the number of the packets that I need!
-         m_txBuffer.Add (i);
-         m_remfromfile--;
+        if(m_txBuffer.Add (i))
+          {
+            m_remfromfile--;
+          }
       }
-      std::cout<<"after adding the additional stuff this is it "<< m_remfromfile <<"\n";
+ 
     }
   if (ack > m_nextTxSequence)
     {
@@ -470,7 +501,7 @@ void CdnClient::DoNewAck (const SequenceNumber32& seq)
       m_retxEvent.Cancel ();
       }*/
   // Try to send more data
-  
+  //  std::cout<<"came in here to process the ack!!!!\n";
 SendWhatPossible();
   
 }
@@ -541,8 +572,14 @@ void CdnClient::ReTxTimeout (void)
 }
 void CdnClient::PopulateBuffer (CdnHeader cdnhdr)
 {
-  NS_LOG_FUNCTION (this);
-  SeqTsHeader tempack;
+ 
+   NS_LOG_FUNCTION (this);
+   if(cdnhdr.GetPort()!=0)
+      {
+        AddNewSubflow(cdnhdr);
+      }
+      
+      SeqTsHeader tempack;
       tempack.SetSeq(0);
       Ptr<Packet> p=Create<Packet>(0);
       if (!m_rxBuffer.Add (p, tempack))
@@ -551,6 +588,7 @@ void CdnClient::PopulateBuffer (CdnHeader cdnhdr)
          NS_ASSERT(0);
          return;
        }
+      // std::cout<<"residam inja alan!\n";
   m_highTxMark=SequenceNumber32(++m_nextTxSequence);
   m_txBuffer.SetHeadSequence (m_nextTxSequence);
  
@@ -562,8 +600,11 @@ void CdnClient::PopulateBuffer (CdnHeader cdnhdr)
   for (i=1; i<=m_lastDataAdded; i++)
   {
                         //I have setup a tx buffer with the number of the packets that I need!
-      m_txBuffer.Add (i);
-      m_remfromfile--;
+    if(m_txBuffer.Add (i))
+      {
+      
+       m_remfromfile--;
+      }
   }
   if(m_rxBuffer.NextRxSequence ()>m_filesize)
       {

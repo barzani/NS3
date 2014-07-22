@@ -105,12 +105,17 @@ CdnTxBuffer::SetMaxBufferSize (uint32_t n)
 }
 
 uint32_t
-CdnTxBuffer::Available (void) const
+CdnTxBuffer::AvailableNum (void) const
 {
-  if(m_size_num!=0)
-    {
+  //std::cout<<"m_size is "<< m_size_num <<" m_data size is "<< m_datanum.size()<<" and "<<this << "  \n";
+  //std::cout<<"availability is "<< m_maxBuffer - m_size_num<< "\n";
       return m_maxBuffer - m_size_num;
-    }
+  
+}
+uint32_t
+CdnTxBuffer::Available(void) const
+{
+
   return m_maxBuffer - m_size;
 }
 
@@ -137,10 +142,12 @@ bool
 CdnTxBuffer::Add (uint32_t num)
 {
   
-  if (1 <= Available ())
+  
+  if (1 <= AvailableNum ())
     {
         m_datanum.push_back (num);
         m_size_num += 1;
+     
         NS_LOG_LOGIC ("Updated size=" << m_size << ", lastSeq=" << m_firstByteSeq +  (m_size));
         
       return true;
@@ -154,6 +161,7 @@ uint32_t CdnTxBuffer::SizeFromSequence (const uint32_t& seq) const
   NS_LOG_FUNCTION (this << seq);
   // Sequence of last byte in buffer
   uint32_t lastSeq;
+ 
   if(m_size_num!=0)
     {
       lastSeq = m_firstByteSeq +  (m_size_num);
@@ -162,6 +170,7 @@ uint32_t CdnTxBuffer::SizeFromSequence (const uint32_t& seq) const
   else{
     lastSeq = m_firstByteSeq +  (m_size);
   }
+  //std::cout<< "m_size is  "<<m_size << " last seq is "<<lastSeq<< "and first byte is "<<m_firstByteSeq <<"\n";
   // Non-negative size
   NS_LOG_LOGIC ("HeadSeq=" << m_firstByteSeq << ", lastSeq=" << lastSeq << ", size=" << m_size <<
                 ", returns " << lastSeq - seq);
@@ -172,14 +181,33 @@ uint32_t CdnTxBuffer::ReturnMaxPossible(uint32_t numBytes, const uint32_t& seq)
 {
   
   uint32_t s = std::min (numBytes, (seq));
-  if (s == 0 || m_datanum.size () == 0)
+
+    if (s == 0 || (m_datanum.size () == 0 && m_data.size()))
     {
       return -1; // Empty packet returned
     }
-  uint32_t count=1;
-  uint32_t numpackets=0;
-  
+    uint32_t count=m_firstByteSeq;
+    uint32_t numpackets=0;
+  if(m_datanum.size()!=0)
+   {
+
   for(NumBufIterator i = m_datanum.begin(); i != m_datanum.end(); ++i)
+    {
+     
+      if(count+1>seq)
+        {
+          numpackets++;
+          if(numpackets>=s)
+            {
+              return numpackets;
+            }
+        }
+      count++;
+    }
+      }
+    else
+      {
+     for(BufIterator i = m_data.begin(); i != m_data.end(); ++i)
     {
       if(count+1>seq)
         {
@@ -191,6 +219,7 @@ uint32_t CdnTxBuffer::ReturnMaxPossible(uint32_t numBytes, const uint32_t& seq)
         }
       count++;
     }
+      }
   return numpackets;
 }
 
@@ -212,7 +241,7 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
 
   // Extract data from the buffer and return
   uint32_t offset = seq - m_firstByteSeq.Get ();
-  std::cout<<"offset is!"<<offset<< "and sequence number is "<< m_firstByteSeq.Get ()<< "\n";
+
   uint32_t count = 0;      // Offset of the first byte of a packet in the buffer
   uint32_t pktSize = 0;
   bool beginFound = false;
@@ -299,7 +328,7 @@ CdnTxBuffer::DiscardUpTo (const uint32_t& seq)
   uint32_t pktSize;
   NS_LOG_LOGIC ("Offset=" << offset);
   BufIterator i = m_data.begin ();
-  std::cout<<"this is the size of offset "<< offset << "\n";
+ 
   //offset=offset*m_packetsize;
   while (i != m_data.end ())
     {
@@ -313,6 +342,7 @@ CdnTxBuffer::DiscardUpTo (const uint32_t& seq)
           offset -= 1; 
           m_firstByteSeq += 1;
           i = m_data.erase (i);
+          //  std::cout<<"erased2!!!!!!!!"<<m_data.size()<<"this is "<< this<<"\n";
           NS_LOG_LOGIC ("Removed one packet of size " << pktSize << ", offset=" << offset);
         }
       else if (offset > 0)
@@ -339,11 +369,12 @@ CdnTxBuffer::DiscardUpTo (const uint32_t& seq)
     }
   NS_LOG_LOGIC ("size=" << m_size << " headSeq=" << m_firstByteSeq << " maxBuffer=" << m_maxBuffer
                         <<" numPkts="<< m_data.size ());
-  std::cout<<m_data.size() << "this is the size of the buffer\n";
+
 
   NS_ASSERT (m_firstByteSeq == seq);
  
 }
+
 void
 CdnTxBuffer::DiscardNumUpTo (const uint32_t& seq)
 {
@@ -360,26 +391,35 @@ CdnTxBuffer::DiscardNumUpTo (const uint32_t& seq)
   NumBufIterator i = m_datanum.begin ();
   while (i != m_datanum.end ())
     {
-      if (offset > 1)
+      if (offset >= 1)
         { // This packet is behind the seqnum. Remove this packet from the buffer
           m_size_num -= 1;
           offset -= 1;
           if(m_size==0)
             {
-          m_firstByteSeq += 1;
+               m_firstByteSeq += 1;
             }
+         
           i = m_datanum.erase (i);
+          //std::cout<<"erased!!!!!!!!"<<m_datanum.size()<<"this is "<< this <<"\n";
         }
       else if (offset > 0)
         { // Part of the packet is behind the seqnum. Fragment
+         
           pktSize = 1 - offset;
           m_size_num -= offset;
           if(m_size==0)
             {
-          m_firstByteSeq += offset;
+              m_firstByteSeq += offset;
             }
           NS_LOG_LOGIC ("Fragmented one packet by size " << offset << ", new size=" << pktSize);
           break;
+        }
+      else
+        {
+
+          break;
+
         }
     }
   // Catching the case of ACKing a FIN

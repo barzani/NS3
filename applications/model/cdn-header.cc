@@ -23,6 +23,7 @@
 #include "ns3/header.h"
 #include "ns3/simulator.h"
 #include "cdn-header.h"
+#include "ns3/ipv4-address.h"
 
 NS_LOG_COMPONENT_DEFINE ("CdnHeader");
 
@@ -37,6 +38,8 @@ CdnHeader::CdnHeader ()
   NS_LOG_FUNCTION (this);
   m_filesize=0;
   m_req_number=0;
+  m_port=0;
+
 }
 
   void CdnHeader::SetFileSize(uint32_t filesize)
@@ -83,7 +86,8 @@ uint32_t
 CdnHeader::GetSerializedSize (void) const
 {
   NS_LOG_FUNCTION (this);
-  return 16;
+  return 18;
+
 }
   void CdnHeader::SetReqNumber(uint32_t num)
   {
@@ -94,6 +98,14 @@ CdnHeader::GetSerializedSize (void) const
     
     return m_req_number;
   }
+void CdnHeader::SetPort(uint16_t port)
+{
+  m_port=port;
+}
+uint16_t CdnHeader::GetPort()
+{
+  return m_port;
+}
 void
 CdnHeader::Serialize (Buffer::Iterator start) const
 {
@@ -102,9 +114,23 @@ CdnHeader::Serialize (Buffer::Iterator start) const
   i.WriteHtonU32 (m_syn);
   i.WriteHtonU32 (m_filesize);
   i.WriteHtonU32 (m_req_number);
+  i.WriteHtonU32 (m_destination.Get ());
+  i.WriteHtonU16 (m_port);
+
 
 }
+void 
+CdnHeader::SetDestination (Address dst)
+{
+  NS_LOG_FUNCTION (this << dst);
+  m_destination = Ipv4Address::ConvertFrom(dst);
+}
 
+Address CdnHeader::GetDestination (void) const
+{
+  NS_LOG_FUNCTION (this);
+  return Address(m_destination);
+}
 uint32_t
 CdnHeader::Deserialize (Buffer::Iterator start)
 {
@@ -113,6 +139,9 @@ CdnHeader::Deserialize (Buffer::Iterator start)
   m_syn = i.ReadNtohU32 ();
   m_filesize=i.ReadNtohU32 ();
   m_req_number=i.ReadNtohU32 ();
+  m_destination.Set (i.ReadNtohU32 ());
+  m_port=i.ReadNtohU16();
+
   return GetSerializedSize ();
 }
 

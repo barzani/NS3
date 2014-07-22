@@ -45,6 +45,7 @@ CdnServerHelper::SetAttribute (std::string name, const AttributeValue &value)
 ApplicationContainer
 CdnServerHelper::Install (NodeContainer c)
 {
+
   ApplicationContainer apps;
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
     {
@@ -57,6 +58,30 @@ CdnServerHelper::Install (NodeContainer c)
     }
   return apps;
 }
+
+ApplicationContainer
+CdnServerHelper::Install (NodeContainer c, bool mainserver, Address address, uint16_t port)
+{
+
+  ApplicationContainer apps;
+  for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
+    {
+      Ptr<Node> node = *i;
+
+      m_server = m_factory.Create<CdnServer> ();
+      if(mainserver)
+        {
+          m_server->SetMain();
+          m_server->AddRemote (address, port);
+        }
+      node->AddApplication (m_server);
+      apps.Add (m_server);
+
+    }
+  return apps;
+}
+
+
 
 Ptr<CdnServer>
 CdnServerHelper::GetServer (void)

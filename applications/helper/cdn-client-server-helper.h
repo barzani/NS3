@@ -79,6 +79,8 @@ public:
    * \returns a Ptr to the last created server application
    */
   Ptr<CdnServer> GetServer (void);
+
+  ApplicationContainer Install (NodeContainer c, bool mainserver, Address address, uint16_t port);
 private:
   ObjectFactory m_factory; //!< Object factory.
   Ptr<CdnServer> m_server; //!< The last created server application
