@@ -251,11 +251,32 @@ CdnClientSubflow::Send (uint32_t syntype)
       }
   }
 
+void CdnClientSubflow::HalfWindow(void)
+{
+  
+  m_cWnd=(m_cWnd/2.0);
+  if(m_cWnd<2)
+    {
+      m_cWnd=2;
+    }
+  m_ssThresh=(m_ssThresh/2.0);
+  if(m_ssThresh<2)
+    {
+      m_ssThresh=2;
+    }
+}
  int64_t CdnClientSubflow::GetRTT(void)
   {
     
     return m_rtt->GetCurrentEstimate().ToInteger (Time::MS);
   }
+
+
+uint32_t CdnClientSubflow::Getcwnd(void)
+{
+  return m_cWnd;
+}
+
 
   bool CdnClientSubflow::IsAvailable(uint32_t * w)
   {

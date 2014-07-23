@@ -87,6 +87,7 @@ public:
   void PopulateBuffer (CdnHeader cdnhdr);
   void ProcessAck(Ptr<Packet> p,CdnHeader Ack);
   void SendWhatPossible(void);
+  void  RcvBufOptimization(bool penal);
 
 protected:
   virtual void DoDispose (void);
@@ -122,7 +123,7 @@ private:
   bool OutOfRange (uint32_t head, uint32_t tail) const;
   Ptr<CdnClientSubflow> GetNextSubflow(uint32_t *w);
   Ptr<CdnClientSubflow> GetSubflowForRetransmit(uint32_t seq);
-
+  void OptimizingRetrans(Ptr<CdnClientSubflow> subflow);
   uint32_t m_count; //!< Maximum number of packets the application will send
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
@@ -164,6 +165,7 @@ private:
   Time                   m_cnTimeout;       //!< Timeout for connection retry
   EventId           m_retxEvent;       //!< Retransmission event
   std::map< uint32_t, Ptr<CdnClientSubflow> > subflowmap;
+  Time               m_lastOpt;
  
 };
 

@@ -72,6 +72,8 @@ public:
   bool IsAvailable(uint32_t * w);
   void AddDataPacket(Ptr<Packet> packet);
   void SetRwnd(uint32_t m_rWnd);
+  void HalfWindow(void);
+  uint32_t Getcwnd(void);
 protected:
   virtual void DoDispose (void);
 

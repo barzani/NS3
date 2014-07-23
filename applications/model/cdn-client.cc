@@ -113,6 +113,7 @@ CdnClient::CdnClient ()
   m_count=0;
   m_cnTimeout=Seconds(0.2);
   m_rto=Seconds(0.6);
+  m_lastOpt=Seconds(0.0);
 }
 
 CdnClient::~CdnClient ()
@@ -251,6 +252,82 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
     *w=minw;
     return bestsubflow;
   }
+
+void CdnClient::OptimizingRetrans(Ptr<CdnClientSubflow> subflow)
+{
+  NS_LOG_FUNCTION (this);
+   std::vector<Ptr<CdnClientSubflow> >::iterator it;
+  if(subflowmap[m_txBuffer.HeadSequence()]!=subflow)
+    {
+      for(it=m_subflowList.begin(); it!=m_subflowList.end(); it++)
+      {
+        if((*it)!=subflow && subflowmap[m_txBuffer.HeadSequence()]==(*it))
+          {
+            if((*it)->Getcwnd()<=4)
+              {
+                 SendDataPacket (subflow, m_txBuffer.HeadSequence (), 1);
+                 m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1);
+                 break;
+              }
+            if(4*subflow->GetRTT()<=(*it)->GetRTT())
+              {
+                SendDataPacket (subflow, m_txBuffer.HeadSequence (), 1);
+                m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1);
+                break;
+              }
+          }
+  
+      }
+    }
+}
+
+void  CdnClient::RcvBufOptimization(bool penal)
+{
+  NS_LOG_FUNCTION (this);
+   std::vector<Ptr<CdnClientSubflow> >::iterator it;
+
+  if(m_txBuffer.HeadSequence()==m_nextTxSequence)
+    {
+      return;
+    }
+    uint32_t w;
+
+    Ptr<CdnClientSubflow> subflow= GetNextSubflow(&w);
+
+  if (!penal && m_txBuffer.AvailableNum())
+    {
+      OptimizingRetrans(subflow);
+    }
+
+
+
+  if(subflow==NULL)
+    {
+      return;
+    }
+  if(Simulator::Now()-m_lastOpt>=(subflow->GetRTT()/8))
+    {
+     
+      for(it=m_subflowList.begin(); it!=m_subflowList.end(); it++)
+      {
+      
+        if((*it)!=subflow && subflowmap[m_txBuffer.HeadSequence()]!=(*it))
+          {
+              
+            if(subflow->GetRTT()<(*it)->GetRTT())
+              {
+              
+                (*it)->HalfWindow();
+                m_lastOpt=Simulator::Now();
+              }
+            break;
+          }
+  
+      }
+    }
+   
+  OptimizingRetrans(subflow);
+}
   /* This function does: requests the next packet.
    * This is sending requests one at a time, rather than making a contigues request.
    */
@@ -267,7 +344,10 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
         m_nextTxSequence += 1;
       
       }
-
+     if(!m_txBuffer.SizeFromSequence (m_nextTxSequence) && !m_txBuffer.AvailableNum())
+       {
+         RcvBufOptimization(false);
+       }
     while (m_txBuffer.SizeFromSequence (m_nextTxSequence))
     {
       uint32_t w;
@@ -290,7 +370,10 @@ CdnClient::EstimateRTT(const SeqTsHeader& AckHdr)
         {
           nPacketsSent++;                             // Count sent this loop
           m_nextTxSequence += 1;                     // Advance next tx sequence
-
+          if(m_nextTxSequence>m_txBuffer.HeadSequence())
+            {
+              RcvBufOptimization(true);
+            }
 
         }
 
