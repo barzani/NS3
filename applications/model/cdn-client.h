@@ -84,9 +84,35 @@ public:
    * \param port remote port
    */
   void SetRemote (Address ip, uint16_t port);
+  
+  /**
+   *Setup the transmit buffer with the requests
+   * that are to be sent to the server. 
+   *\param cdnhdr: the header received from the connection
+   * setup on the main subflow. Contins the filesize obtained 
+   * from the server.
+   */
   void PopulateBuffer (CdnHeader cdnhdr);
+  
+  
+  /**
+   * Processes the meta level acknowledgement.
+   * \param p: The packet that was received at lower layer.
+   * \param Ack: the meta level header.
+   */
   void ProcessAck(Ptr<Packet> p,CdnHeader Ack);
+  
+  /**
+   * Transmits pending data, if it is possible to do so
+   * i.e., if the transmission window/receive window allows.
+   */
   void SendWhatPossible(void);
+  /**
+   * This is derived from MPTCP linux kernel implementation
+   * used to minimize the effect of RTT differences between paths
+   * \param penal: used to identify whether oportunistic retransmit 
+   * is to be used.
+   */
   void  RcvBufOptimization(bool penal);
 
 protected:
@@ -124,17 +150,14 @@ private:
   Ptr<CdnClientSubflow> GetNextSubflow(uint32_t *w);
   Ptr<CdnClientSubflow> GetSubflowForRetransmit(uint32_t seq);
   void OptimizingRetrans(Ptr<CdnClientSubflow> subflow);
-  uint32_t m_count; //!< Maximum number of packets the application will send
-  Time m_interval; //!< Packet inter-send time
-  uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
+
+
   Ptr<Socket> m_socket; //!< the main socket!
   std::vector<Ptr<Socket> > m_socketList; // !< the list of subflows!
   std::vector<Ptr<CdnClientSubflow> > m_subflowList; // !< the list of subflowapps.
   
   Address m_peerAddress; //!< Remote peer address
   uint16_t m_peerPort; //!< Remote peer port
-  EventId m_sendEvent; //!< Event to send the next packet
-
   uint32_t m_state; /*The state of the connection on each subflow (later you have to make this into a tupled list of some sort), 
                      * -1 closed
                      * 0 for syn-sent
@@ -146,8 +169,7 @@ private:
   CdnRxBuffer  m_rxBuffer;  //Reusing code from TcpRxBuffer. 
   CdnTxBuffer  m_txBuffer;
   TracedValue<uint32_t> m_rWnd;        //!< This should be the size of the receive window at the client!!
-  TracedValue<uint32_t> m_nextTxSequence; //!< Next seqnum to be sent (SND.NXT), ReTx pushes it back
-  Ptr<RttEstimator> m_rtt; //!< Round trip time estimator                     
+  TracedValue<uint32_t> m_nextTxSequence; //!< Next seqnum to be sent (SND.NXT), ReTx pushes it back                
   uint32_t          m_dupAckCount;     //!< Dupack counter
   TracedValue<Time> m_lastRtt;
   TracedValue<Time> m_rto;             //!< Retransmit timeout
@@ -158,7 +180,6 @@ private:
   TracedValue<SequenceNumber32> m_highTxMark;     //!< Highest seqno ever sent, regardless of ReTx
   bool                   m_limitedTx;    //!< perform limited transmit
   uint32_t               m_ssThresh;     //!< Slow Start Threshold
-  TracedValue<uint32_t>  m_cWnd;         //!< Congestion window
   uint32_t               m_initialCWnd;  //!< Initial cWnd value
   SequenceNumber32       m_recover;      //!< Previous highest Tx seqnum for fast recovery
   uint32_t               m_cnCount;         //!< Count of remaining connection retries
