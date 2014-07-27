@@ -634,12 +634,12 @@ void CdnClientSubflow::DupAck (const SeqTsHeader& t, uint32_t count)
 }
 void CdnClientSubflow::NewAck (const SequenceNumber32& seq)
 {
-   NS_LOG_FUNCTION (this);
+        NS_LOG_FUNCTION (this);
         uint32_t ack=seq.GetValue();
         if(ack==(m_filesize+1))
         {
           std::cout<<"file completely served!\n";
-          Simulator::Stop();
+          //Simulator::Stop();
         }
       NS_LOG_LOGIC (this << " Cancelled ReTxTimeout event which was set to expire at " <<
                     (Simulator::Now () + Simulator::GetDelayLeft (m_retxEvent)).GetSeconds ());

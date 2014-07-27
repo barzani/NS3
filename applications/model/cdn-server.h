@@ -82,8 +82,24 @@ public:
    *  be a multiple of 8
    */
   void SetPacketWindowSize (uint16_t size);
+  /**
+   * Handles any packets that are received:
+   * \param: cdnhdr: meta level header.
+   * \param: seqTs: subflow level header.
+   * \param: AckHdr: Acknowledgement accompanying the packet.
+   * \param: the address of the socket from which the packet was
+   * received.
+   */
   void ProcessAndHandleReceivedPacket(CdnHeader cdnhdr, SeqTsHeader seqTs, SeqTsHeader AckHdr, Ptr<Packet> packet, Address from);
+  /**
+   * Sets this server as the main server.
+   */
   void SetMain();
+  /**
+   * Adds an alternative server to the list of alternatives
+   * \param: ip: ip address of the alternative server
+   * \param: port: port number of the alternative server
+   */
   void AddRemote (Address ip, uint16_t port);
 protected:
   virtual void DoDispose (void);

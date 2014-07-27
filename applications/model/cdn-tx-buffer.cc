@@ -53,7 +53,7 @@ CdnTxBuffer::GetTypeId (void)
  * initialized below is insignificant.
  */
 CdnTxBuffer::CdnTxBuffer (uint32_t n)
-  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (5), m_data (0), m_packetsize(1400)
+  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (1000), m_data (0), m_packetsize(1400)
 {
 }
 
@@ -231,9 +231,9 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
   
   if (s == 0)
     {
-   
       return Create<Packet> (); // Empty packet returned
     }
+
   if (m_data.size () == 0)
     { // No actual data, just return dummy-data packet of correct size
       return Create<Packet> (0);

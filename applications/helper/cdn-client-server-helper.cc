@@ -23,6 +23,7 @@
 #include "ns3/udp-trace-client.h"
 #include "ns3/uinteger.h"
 #include "ns3/string.h"
+#include <vector>
 
 namespace ns3 {
 
@@ -60,7 +61,7 @@ CdnServerHelper::Install (NodeContainer c)
 }
 
 ApplicationContainer
-CdnServerHelper::Install (NodeContainer c, bool mainserver, Address address, uint16_t port)
+CdnServerHelper::Install (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port)
 {
 
   ApplicationContainer apps;
@@ -72,7 +73,11 @@ CdnServerHelper::Install (NodeContainer c, bool mainserver, Address address, uin
       if(mainserver)
         {
           m_server->SetMain();
-          m_server->AddRemote (address, port);
+          NS_ASSERT(address.size()==port.size());
+          for(int j=0; j<address.size(); j++)
+            {
+              m_server->AddRemote (address[j], port[j]);
+            }
         }
       node->AddApplication (m_server);
       apps.Add (m_server);

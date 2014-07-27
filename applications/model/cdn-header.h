@@ -24,6 +24,7 @@
 #include "ns3/header.h"
 #include "cdn-rx-buffer.h"
 #include "ns3/ipv4-address.h"
+#include <vector>
 
 
 namespace ns3 {
@@ -60,9 +61,11 @@ public:
   void SetReqNumber(uint32_t num);
   uint32_t GetReqNumber(void);
   void SetDestination (Address dst);
-  Address GetDestination (void) const;
+  Address GetDestination (void);
   void SetPort(uint16_t port);
   uint16_t GetPort();
+  uint32_t GetNumber();
+  Address PeekDestination (void);
 
 private:
   uint32_t m_syn; //Type of the packet
@@ -74,10 +77,9 @@ private:
   uint32_t m_filesize;
   uint32_t m_req_number;
   EventId           m_retxEvent;       //!< Retransmission event
-  Ipv4Address m_destination; //!< destination address
-  uint16_t m_port;
-  
-
+  std::vector<Ipv4Address> m_destination; //!< destination address
+  std::vector<uint16_t> m_port;
+  uint32_t m_number;
 };
 
 } // namespace ns3

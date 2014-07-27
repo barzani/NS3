@@ -38,8 +38,7 @@ CdnHeader::CdnHeader ()
   NS_LOG_FUNCTION (this);
   m_filesize=0;
   m_req_number=0;
-  m_port=0;
-
+  m_number=0;
 }
 
   void CdnHeader::SetFileSize(uint32_t filesize)
@@ -86,7 +85,7 @@ uint32_t
 CdnHeader::GetSerializedSize (void) const
 {
   NS_LOG_FUNCTION (this);
-  return 18;
+  return (16+m_number*6);
 
 }
   void CdnHeader::SetReqNumber(uint32_t num)
@@ -100,11 +99,19 @@ CdnHeader::GetSerializedSize (void) const
   }
 void CdnHeader::SetPort(uint16_t port)
 {
-  m_port=port;
+  m_port.push_back(port);
 }
 uint16_t CdnHeader::GetPort()
 {
-  return m_port;
+  uint16_t port;
+  port=m_port.back();
+  m_port.pop_back();
+  return port;
+}
+uint32_t 
+CdnHeader::GetNumber()
+{
+  return m_number;
 }
 void
 CdnHeader::Serialize (Buffer::Iterator start) const
@@ -114,22 +121,33 @@ CdnHeader::Serialize (Buffer::Iterator start) const
   i.WriteHtonU32 (m_syn);
   i.WriteHtonU32 (m_filesize);
   i.WriteHtonU32 (m_req_number);
-  i.WriteHtonU32 (m_destination.Get ());
-  i.WriteHtonU16 (m_port);
-
-
+  i.WriteHtonU32 (m_number);
+  for(int j=0; j<m_number; j++)
+    {
+      i.WriteHtonU32 (m_destination[j].Get ());
+      i.WriteHtonU16 (m_port[j]);
+    }
 }
 void 
 CdnHeader::SetDestination (Address dst)
 {
   NS_LOG_FUNCTION (this << dst);
-  m_destination = Ipv4Address::ConvertFrom(dst);
+  m_destination.push_back(Ipv4Address::ConvertFrom(dst));
+  m_number++;
 }
 
-Address CdnHeader::GetDestination (void) const
+Address CdnHeader::GetDestination (void)
 {
   NS_LOG_FUNCTION (this);
-  return Address(m_destination);
+  Ipv4Address destination=m_destination.back();
+  m_destination.pop_back();
+  return Address(destination);
+}
+Address CdnHeader::PeekDestination (void)
+{
+  NS_LOG_FUNCTION (this);
+  Ipv4Address destination=m_destination.back();
+  return Address(destination);
 }
 uint32_t
 CdnHeader::Deserialize (Buffer::Iterator start)
@@ -139,8 +157,14 @@ CdnHeader::Deserialize (Buffer::Iterator start)
   m_syn = i.ReadNtohU32 ();
   m_filesize=i.ReadNtohU32 ();
   m_req_number=i.ReadNtohU32 ();
-  m_destination.Set (i.ReadNtohU32 ());
-  m_port=i.ReadNtohU16();
+  m_number=i.ReadNtohU32();
+  Ipv4Address destination;
+  for(int j=0; j<m_number; j++)
+    {
+      destination.Set(i.ReadNtohU32 ());
+      m_destination.push_back (destination);
+      m_port.push_back(i.ReadNtohU16());
+    }
 
   return GetSerializedSize ();
 }

@@ -185,7 +185,7 @@ CdnClient::AddNewSubflow(CdnHeader ack)
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
   m_socketList.push_back(Socket::CreateSocket (GetNode (), tid));
   tempSock = m_socketList.back();
-  if (Ipv4Address::IsMatchingType(ack.GetDestination()) == true)
+  if (Ipv4Address::IsMatchingType(ack.PeekDestination()) == true)
    {
       tempSock->Bind ();
       tempSock->Connect (InetSocketAddress (Ipv4Address::ConvertFrom(ack.GetDestination()),ack.GetPort()));
@@ -478,9 +478,12 @@ void
 CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
 {
  NS_LOG_FUNCTION (this);
- if(Ack.GetPort()!=0)
+ if(Ack.GetNumber()!=0)
   {
-    AddNewSubflow(Ack);
+    for(int j=0; j<Ack.GetNumber(); j++)
+      {
+        AddNewSubflow(Ack);
+      }
   }
  /**
   * We need to get a sequence number
@@ -634,22 +637,29 @@ CdnClient::DoNewAck (const SequenceNumber32& seq)
     }
   SendWhatPossible();
 }
-uint32_t CdnClient::ChunksInFlight ()
+ /**
+  * Tells us how many chunks are in flight.
+  */
+uint32_t 
+CdnClient::ChunksInFlight ()
 {
   NS_LOG_FUNCTION (this);
   return m_highTxMark.Get () - SequenceNumber32(m_txBuffer.HeadSequence ());
 }
 
-void CdnClient::DoRetransmit ()
+void
+CdnClient::DoRetransmit ()
 {
   NS_LOG_FUNCTION (this);
-  //Ptr<CdnClientSubflow> subflow=GetNextSubflow(&w);
   Ptr<CdnClientSubflow> subflow=GetSubflowForRetransmit(m_txBuffer.HeadSequence());
   SendDataPacket (subflow, m_txBuffer.HeadSequence (), 1);
   // In case of RTO, advance m_nextTxSequence
-  m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1);
-  
+  m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1); 
 }
+
+  /**
+   * Performs retrnasmission.
+   */
 void
 CdnClient::Retransmit (void)
 {
@@ -660,52 +670,41 @@ CdnClient::Retransmit (void)
   m_nextTxSequence = m_txBuffer.HeadSequence (); // Restart from highest Ack
   DoRetransmit ();                          // Retransmit the packet
 }
-void CdnClient::ReTxTimeout (void)
+void 
+CdnClient::ReTxTimeout (void)
 {
   NS_LOG_FUNCTION (this);
-  /* NS_LOG_FUNCTION (this);
-  NS_LOG_LOGIC (this << " ReTxTimeout Expired at time " << Simulator::Now ().GetSeconds ());
-  // If erroneous timeout in closed/timed-wait state, just return
-  if (m_state == CLOSED || m_state == TIME_WAIT)
-    {
-      return;
-    }
-  // If all data are received (non-closing socket and nothing to send), just return
-  if (m_state <= ESTABLISHED && m_txBuffer.HeadSequence () >= m_highTxMark)
-    {
-      return;
-    }
-  */
-    Retransmit ();
+  Retransmit ();
 }
- bool CdnClient::OutOfRange (uint32_t head, uint32_t tail) const
+
+bool 
+CdnClient::OutOfRange (uint32_t head, uint32_t tail) const
 {
   NS_LOG_FUNCTION (this);
   // In all other cases, check if the sequence number is in range
   return (tail < m_rxBuffer.NextRxSequence () || m_rxBuffer.MaxRxSequence () <= head);
 }
-void CdnClient::PopulateBuffer (CdnHeader cdnhdr)
+void 
+CdnClient::PopulateBuffer (CdnHeader cdnhdr)
 {
- 
-   NS_LOG_FUNCTION (this);
-   if(cdnhdr.GetPort()!=0)
-      {
-        AddNewSubflow(cdnhdr);
-      }
-      
-      SeqTsHeader tempack;
-      tempack.SetSeq(0);
-      Ptr<Packet> p=Create<Packet>(0);
-      if (!m_rxBuffer.Add (p, tempack))
-       { // Insert failed: No data or RX buffer full
-         
-         NS_ASSERT(0);
-         return;
+  NS_LOG_FUNCTION (this);
+  if(cdnhdr.GetNumber()!=0)
+   {
+     for(int j=0; j<cdnhdr.GetNumber(); j++)
+       {
+         AddNewSubflow(cdnhdr);
        }
-      // std::cout<<"residam inja alan!\n";
+   } 
+  SeqTsHeader tempack;
+  tempack.SetSeq(0);
+  Ptr<Packet> p=Create<Packet>(0);
+  if (!m_rxBuffer.Add (p, tempack))
+   { // Insert failed: No data or RX buffer full
+     NS_ASSERT(0);
+     return;
+   }
   m_highTxMark=SequenceNumber32(++m_nextTxSequence);
   m_txBuffer.SetHeadSequence (m_nextTxSequence);
- 
   m_filesize=cdnhdr.GetFileSize();
   m_remfromfile=m_filesize;
   uint32_t i;
@@ -713,35 +712,28 @@ void CdnClient::PopulateBuffer (CdnHeader cdnhdr)
   uint32_t m_lastDataAdded=std::min(m_filesize,m_txBuffer.Available());
   for (i=1; i<=m_lastDataAdded; i++)
   {
-                        //I have setup a tx buffer with the number of the packets that I need!
-    if(m_txBuffer.Add (i))
-      {
-      
-       m_remfromfile--;
-      }
+  //I have setup a tx buffer with the number of the packets that I need!
+   if(m_txBuffer.Add (i))
+    {
+      m_remfromfile--;
+    }
   }
   if(m_rxBuffer.NextRxSequence ()>m_filesize)
-      {
-        std::cout<<"Finished file transmit!\n";
+   {
+     std::cout<<"Finished file transmit!\n";
+   }
+  else
+   {
+     if(m_txBuffer.Size () == 0)
+       {
+         std::cout<<"finished file transmit\n";
+       }
+     else
+       {       
+         SendWhatPossible();
+       }          
       }
-    else
-      {
-            if(m_txBuffer.Size () == 0)
-              {
-                std::cout<<"finished file transmit\n";
-              }
-            else
-              {
-                
-                SendWhatPossible();
-              }
-            
-      }
-
-
 }
-
-
 } // Namespace ns3
 
 

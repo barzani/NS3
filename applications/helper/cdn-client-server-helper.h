@@ -27,6 +27,8 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/cdn-server.h"
 #include "ns3/cdn-client.h"
+#include <vector>
+
 namespace ns3 {
 /**
  * \ingroup udpclientserver
@@ -80,7 +82,7 @@ public:
    */
   Ptr<CdnServer> GetServer (void);
 
-  ApplicationContainer Install (NodeContainer c, bool mainserver, Address address, uint16_t port);
+  ApplicationContainer Install (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port);
 private:
   ObjectFactory m_factory; //!< Object factory.
   Ptr<CdnServer> m_server; //!< The last created server application

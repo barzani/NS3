@@ -170,8 +170,7 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
           if (i->first >= headSeq && lastByteSeq <= tailSeq)
             { // Rare case: Existing packet is embedded fully in the new packet
               m_size -= 1;
-              m_data.erase (i++);
-              
+              m_data.erase (i++);           
               continue;
             }
           if (i->first < headSeq)
@@ -206,6 +205,7 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
           return false;
         }
     }
+  
   // Insert packet into buffer
   NS_ASSERT (m_data.find (headSeq) == m_data.end ()); // Shouldn't be there yet
   m_data [ headSeq ] = p;
@@ -230,7 +230,6 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
     { // Account for the FIN packet
       ++m_nextRxSeq;
     };
- 
   return true;
 }
 
