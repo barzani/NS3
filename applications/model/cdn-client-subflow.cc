@@ -803,7 +803,7 @@ void CdnClientSubflow::AddDataPacket(Ptr<Packet> packet)
  
   
    NS_LOG_FUNCTION (this);
-   NS_ASSERT(m_count<m_filesize);
+   //NS_ASSERT(m_count<m_filesize);
    m_count++;
    m_txBuffer.SetSize(packet->GetSize());
    

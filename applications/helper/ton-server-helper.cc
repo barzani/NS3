@@ -23,6 +23,7 @@
 #include "ns3/inet-socket-address.h"
 #include "ns3/names.h"
 #include "ns3/ton-server.h"
+#include <vector>
 
 
 namespace ns3 {
@@ -75,7 +76,7 @@ TonServerHelper::InstallPriv (Ptr<Node> node) const
 }
 
 ApplicationContainer
-TonServerHelper::InstallPriv (NodeContainer c, bool mainserver, Address address, uint16_t port)
+TonServerHelper::InstallPriv (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port)
 {
 
   ApplicationContainer apps;
@@ -86,8 +87,12 @@ TonServerHelper::InstallPriv (NodeContainer c, bool mainserver, Address address,
       Ptr<TonServer> app = m_factory.Create<TonServer> ();
       if(mainserver)
         {
-          app->SetMain();
-          app->AddRemote (address, port);
+           app->SetMain();
+          NS_ASSERT(address.size()==port.size());
+          for(int j=0; j<address.size(); j++)
+            {
+              app->AddRemote (address[j], port[j]);
+            }
         }
       node->AddApplication (app);
       apps.Add (app);
@@ -97,20 +102,20 @@ TonServerHelper::InstallPriv (NodeContainer c, bool mainserver, Address address,
 }
 
 ApplicationContainer
-TonServerHelper::Install (Ptr<Node> node, bool mainserver, Address address, uint16_t port) 
+TonServerHelper::Install (Ptr<Node> node, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port) 
 {
   return ApplicationContainer (InstallPriv (node, mainserver, address, port));
 }
 
 ApplicationContainer
-TonServerHelper::Install (std::string nodeName,bool mainserver, Address address, uint16_t port) 
+TonServerHelper::Install (std::string nodeName,bool mainserver, std::vector<Address> address, std::vector<uint16_t> port) 
 {
   Ptr<Node> node = Names::Find<Node> (nodeName);
   return ApplicationContainer (InstallPriv (node, mainserver, address, port));
 }
 
 ApplicationContainer
-TonServerHelper::Install (NodeContainer c, bool mainserver, Address address, uint16_t port) 
+TonServerHelper::Install (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port) 
 {
   ApplicationContainer apps;
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)

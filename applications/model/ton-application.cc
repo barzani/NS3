@@ -64,7 +64,7 @@ TonApplication::GetTypeId (void)
                    MakeDataRateAccessor (&TonApplication::m_cbrRate),
                    MakeDataRateChecker ())
     .AddAttribute ("PacketSize", "The size of packets sent in on state",
-                   UintegerValue (512),
+                   UintegerValue (26044),
                    MakeUintegerAccessor (&TonApplication::m_pktSize),
                    MakeUintegerChecker<uint32_t> (1))
     .AddAttribute ("Remote", "The address of the destination",
@@ -97,7 +97,7 @@ TonApplication::TonApplication ()
     m_lastStartTime (Seconds (0))
 {
   NS_LOG_FUNCTION (this);
-  m_pktSize=0;
+  m_pktSize=26044;
   m_nextTxSequence=0;
 }
 
@@ -352,7 +352,7 @@ void TonApplication::SendNextPacketTo(Address from, Ptr<Socket> socket)
    */
   if(m_rxBuffer.NextRxSequence ()>=m_filesize)
    {
-     std::cout<<"Finished file transmit!\n";
+     std::cout<<"Finished file transmit! at time "<<(Simulator::Now()).GetSeconds()<< "\n";
      Simulator::Stop();
    }
   if (m_txBuffer.SizeFromSequence (m_nextTxSequence))
@@ -360,11 +360,23 @@ void TonApplication::SendNextPacketTo(Address from, Ptr<Socket> socket)
      /**
       * Send this packet on the subflow.
       */
+
      if(!SendDataPacket (from, socket, m_nextTxSequence))
       {
         m_nextTxSequence += 1;                     // Advance next tx sequence
       }  
     }
+  else
+    {
+      Retransmit(from, socket);
+    }
+}
+
+void TonApplication::Retransmit(Address from, Ptr<Socket> socket)
+{
+  SendDataPacket (from, socket, m_txBuffer.HeadSequence ());
+  // In case of RTO, advance m_nextTxSequence
+  m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1); 
 }
 
 uint32_t TonApplication::SendDataPacket(Address from, Ptr<Socket> socket, uint32_t seq)

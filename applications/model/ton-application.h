@@ -82,6 +82,8 @@ public:
   */
   int64_t AssignStreams (int64_t stream);
 
+  void Retransmit(Address from, Ptr<Socket> socket);
+
 protected:
   virtual void DoDispose (void);
 private:

@@ -82,10 +82,10 @@ public:
    * \returns Container of Ptr to the applications installed.
    */
   ApplicationContainer Install (std::string nodeName) const;
-  ApplicationContainer InstallPriv (NodeContainer c, bool mainserver, Address address, uint16_t port);
-  ApplicationContainer Install (Ptr<Node> node, bool mainserver, Address address, uint16_t port);
-  ApplicationContainer Install (std::string nodeName,bool mainserver, Address address, uint16_t port);
-  ApplicationContainer Install (NodeContainer c, bool mainserver, Address address, uint16_t port);
+  ApplicationContainer InstallPriv (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port);
+  ApplicationContainer Install (Ptr<Node> node, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port);
+  ApplicationContainer Install (std::string nodeName,bool mainserver, std::vector<Address> address, std::vector<uint16_t> port);
+  ApplicationContainer Install (NodeContainer c, bool mainserver, std::vector<Address> address, std::vector<uint16_t> port);
   
 
 private:

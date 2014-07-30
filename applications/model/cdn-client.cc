@@ -325,7 +325,7 @@ CdnClient::SendWhatPossible()
    */
   if(m_rxBuffer.NextRxSequence ()>m_filesize)
    {
-     std::cout<<"Finished file transmit!\n";
+     std::cout<<"Finished file transmit! at time "<<(Simulator::Now()).GetSeconds()<< "\n";
      Simulator::Stop();
    }
   if(m_nextTxSequence == 0)
