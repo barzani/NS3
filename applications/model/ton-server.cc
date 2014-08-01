@@ -61,6 +61,11 @@ TonServer::GetTypeId (void)
                    UintegerValue (30),
                    MakeUintegerAccessor (&TonServer::m_filesize),
                    MakeUintegerChecker<uint32_t> ())
+    .AddAttribute ("Speed", 
+                   "The speed with which the application can send packets ",
+                   IntegerValue (-1),
+                   MakeIntegerAccessor (&TonServer::m_speed),
+                   MakeIntegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -73,6 +78,8 @@ TonServer::TonServer ()
   m_filesize=30;
   m_ismain=false;
   m_txBuffer.SetMaxBufferSize (m_filesize+1);
+  m_speed=-1;
+  m_chunksize=0;
 }
 
 TonServer::~TonServer()
@@ -148,9 +155,9 @@ void TonServer::StopApplication ()     // Called at time specified by Stop
     }
 }
 
-void TonServer::HandleRead (Ptr<Socket> socket)
+void TonServer::DoHandleRead(Ptr<Socket> socket)
 {
-  NS_LOG_FUNCTION (this << socket);
+ NS_LOG_FUNCTION (this << socket);
   Ptr<Packet> packet;
   Address from;
   CdnHeader cdnhdr;
@@ -182,6 +189,7 @@ void TonServer::HandleRead (Ptr<Socket> socket)
             ToSendCdnHdr.SetFileSize(m_filesize);
             if(m_ismain)
              {
+
                NS_ASSERT(m_peerAddress.size()==m_peerPort.size());
                for(int j=0;j<m_peerAddress.size();j++)
                  {
@@ -207,7 +215,6 @@ void TonServer::HandleRead (Ptr<Socket> socket)
             uint32_t reqNum=cdnhdr.GetReqNumber();
             ToSendPacket=GetChunk(reqNum, ToSendPacket);
             ToSendPacket->AddHeader(ToSendCdnHdr);
-            std::cout<<ToSendPacket->GetSize()<<" Packet Size \n";
             socket->SendTo (ToSendPacket, 0, from); 
             return;  
           }
@@ -218,6 +225,21 @@ void TonServer::HandleRead (Ptr<Socket> socket)
      
       m_rxTrace (packet, from);
     }
+}
+
+
+void TonServer::HandleRead (Ptr<Socket> socket)
+{
+  if(m_speed==(-1) || m_chunksize==0)
+    {
+      DoHandleRead(socket);
+    }
+  else
+    {
+      int32_t time=(m_chunksize*1.0/m_speed);
+      Simulator::Schedule (Seconds (time), &TonServer::HandleRead, this, socket);
+    }
+ 
 }
 
 void TonServer::HandlePeerClose (Ptr<Socket> socket)

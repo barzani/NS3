@@ -97,6 +97,7 @@ private:
   void PopulateBuffer(void);
   Ptr<Packet> GetChunk(uint16_t reqnum, Ptr<Packet> packet);
   void ConsumeData(void);
+  void DoHandleRead(Ptr<Socket> socket);
   // In the case of TCP, each socket accept returns a new socket, so the 
   // listening socket is stored separately from the accepted sockets
   Ptr<Socket>     m_socket;       //!< Listening socket
@@ -115,6 +116,7 @@ std::vector<Address> m_peerAddress; //!< Remote peer address
 
   /// Traced Callback: received packets, source address.
   TracedCallback<Ptr<const Packet>, const Address &> m_rxTrace;
+  int32_t m_speed;
 
 };
 

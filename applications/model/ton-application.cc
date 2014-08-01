@@ -70,10 +70,6 @@ TonApplication::GetTypeId (void)
                    UintegerValue (26044),
                    MakeUintegerAccessor (&TonApplication::m_pktSize),
                    MakeUintegerChecker<uint32_t> (1))
-    .AddAttribute ("Speed", "Speed of the server, set to -1 if not to be used",
-                   UintegerValue (-1),
-                   MakeUintegerAccessor (&TonApplication::m_speed),
-                   MakeUintegerChecker<uint32_t> (1))
     .AddAttribute ("Remote", "The address of the destination",
                    AddressValue (),
                    MakeAddressAccessor (&TonApplication::m_peer),
@@ -506,7 +502,6 @@ void TonApplication::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   if(p->GetSize()>0)
    {
      SeqTsHeader tempack;
-
      tempack.SetSeq(Ack.GetReqNumber());
      if (!m_rxBuffer.Add (p, tempack))
       { // Insert failed: No data or RX buffer full
