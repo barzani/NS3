@@ -50,11 +50,6 @@ CdnClientSubflow::GetTypeId (void)
   static TypeId tid = TypeId ("ns3::CdnClientSubflow")
     .SetParent<Application> ()
     .AddConstructor<CdnClientSubflow> ()
-    .AddAttribute ("MaxPackets",
-                   "The maximum number of packets the application will send",
-                   UintegerValue (0),
-                   MakeUintegerAccessor (&CdnClientSubflow::m_count),
-                   MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("RttEstimatorType",
                    "Type of RttEstimator objects.",
                    TypeIdValue (RttMeanDeviation::GetTypeId ()),
@@ -316,6 +311,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
      NS_LOG_FUNCTION (this);
     Ptr<Packet> packet;
     Address from;
+    
     while ((packet = socket->RecvFrom (from)))
       {
         if (packet->GetSize () > 0)
@@ -348,7 +344,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                     //ProcessAck(AckHdr);
                     if(m_ismain)
                       {
-                        std::cout<<"this is the main thread "<< this <<"\n";
+                        
 		         m_parent->PopulateBuffer(cdnhdr);
                       }
                   }
@@ -366,17 +362,21 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                 if(AckHdr.GetSeq()!=(-1))
                   {
              
-		    //std::cout<<"ack came for! "<<AckHdr.GetSeq()<<"\n";
+                    
                     EstimateRTT(AckHdr);      
                      if (packet->GetSize ()
                       && OutOfRange (AckHdr.GetSeq (), AckHdr.GetSeq () + 1))
                      {
                         return;
                      }
+                     
                     ProcessAck(packet,AckHdr);
                     //remember to send up the packet to the upper layer!.
-                
+                    
+
                     m_parent->ProcessAck(packet,cdnhdr);
+                   
+
                   }
                 return;
 
@@ -437,6 +437,8 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
               }
             
       }
+     
+
   }
   /* This function does: requests the next packet.
    * This is sending requests one at a time, rather than making a contigues request.
@@ -444,11 +446,12 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
   void CdnClientSubflow::SendWhatPossible()
   {
      NS_LOG_FUNCTION (this);
+
     if(m_nextTxSequence == 0)
       {
         m_nextTxSequence += 1;   
       }
-    
+
     while (m_txBuffer.SizeFromSequence (m_nextTxSequence))
     {
       
@@ -468,11 +471,9 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
       /*we are */
       SendDataPacket (m_nextTxSequence, s);
       nPacketsSent++;                             // Count sent this loop
-      m_nextTxSequence += 1;                     // Advance next tx sequence
-      
-      
+      m_nextTxSequence += 1;                     // Advance next tx sequence   
   }
-  }
+}
   Ptr<Packet> CdnClientSubflow::GetChunk(uint16_t reqnum, Ptr<Packet> packet)
   {
 
@@ -800,15 +801,10 @@ void CdnClientSubflow::ReTxTimeout (void)
 
 void CdnClientSubflow::AddDataPacket(Ptr<Packet> packet)
 {
- 
-  
-   NS_LOG_FUNCTION (this);
-   //NS_ASSERT(m_count<m_filesize);
-   m_count++;
+   NS_LOG_FUNCTION (this); 
    m_txBuffer.SetSize(packet->GetSize());
-   
-   m_txBuffer.Add(packet);
-   m_txBuffer.Add(m_count);
+   m_txBuffer.Add(packet);   
+   m_txBuffer.Add(1);
 
    SendWhatPossible();
 }

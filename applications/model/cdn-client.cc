@@ -68,7 +68,7 @@ CdnClient::GetTypeId (void)
                    MakeUintegerAccessor (&CdnClient::m_peerPort),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("ReTxThreshold", "Threshold for fast retransmit",
-                    UintegerValue (6),
+                    UintegerValue (10),
                     MakeUintegerAccessor (&CdnClient::m_retxThresh),
                     MakeUintegerChecker<uint32_t> ())
        .AddAttribute ("LimitedTransmit", "Enable limited transmit",
@@ -405,9 +405,12 @@ CdnClient::GetSubflowForRetransmit(uint32_t seq)
    }
   if(bestsubflow==NULL)
    {
-     if(subflowmap[seq]->IsAvailable(&tw))
+     if(subflowmap[seq]!=NULL)
        {
-        bestsubflow=subflowmap[seq];
+        if(subflowmap[seq]->IsAvailable(&tw))
+         {
+          bestsubflow=subflowmap[seq];
+         }
        }
    }
     return bestsubflow;
@@ -422,6 +425,10 @@ uint32_t
 CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t maxSize)
 {
  NS_LOG_FUNCTION (this);
+ if(subflow==NULL)
+   {
+     return 1;
+   }
  int32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
  if(num==-1 || num == 0)
   {
@@ -442,8 +449,8 @@ CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t 
     cdnhdr.SetSynType(4);
     cdnhdr.SetReqNumber(seq);
     p->AddHeader (cdnhdr);
-    m_highTxMark= std::max (SequenceNumber32(seq + 1), m_highTxMark.Get ());    
-    subflow->AddDataPacket (p);   
+    m_highTxMark= std::max (SequenceNumber32(seq + 1), m_highTxMark.Get ());
+    subflow->AddDataPacket (p);
     subflowmap.insert( std::pair<uint32_t, Ptr<CdnClientSubflow> >(seq,subflow) );
   }  
  return 0;
@@ -477,6 +484,7 @@ CdnClient::ConsumeData(void)
 void 
 CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
 {
+  
  NS_LOG_FUNCTION (this);
  if(Ack.GetNumber()!=0)
   {
@@ -491,16 +499,24 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   */
   if(p->GetSize()>0)
    {
-     SeqTsHeader tempack;
+     SeqTsHeader tempack;     
      tempack.SetSeq(Ack.GetReqNumber());
-     if (!m_rxBuffer.Add (p, tempack))
-      { // Insert failed: No data or RX buffer full
-        std::cout<<"WARNING:buffer full! or no data\n";
-        return;
+     if (m_rxBuffer.Add (p, tempack))
+      { // Inserted something
+        std::FILE *f;
+        f = std::fopen("cdn.txt", "a");
+        fprintf(f, "%f\n",(1400.0)/(((Simulator::Now()).GetSeconds()-oldReceive.GetSeconds())*1024.0));
+        fflush(f);
+        oldReceive=Simulator::Now(); 
+        std::fclose(f);
+      }
+     else
+       {
        }
-      
+    
      Ack.SetReqNumber(m_rxBuffer.NextRxSequence ());
    }
+
      /** 
      *First have to check if the ack is in sequence!
      * will have to change this later, to reflect multiple subflows.
@@ -522,6 +538,7 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
    else if (Ack.GetReqNumber () > m_txBuffer.HeadSequence ())
     { // Case 3: New ACK, reset m_dupAckCount and update m_txBuffer
       NS_LOG_LOGIC ("New ack of " << Ack.GetReqNumber ());
+      
     }
    uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
    if (expectedSeq < m_rxBuffer.NextRxSequence ())

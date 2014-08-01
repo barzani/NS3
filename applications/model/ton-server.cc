@@ -182,10 +182,15 @@ void TonServer::HandleRead (Ptr<Socket> socket)
             ToSendCdnHdr.SetFileSize(m_filesize);
             if(m_ismain)
              {
-               ToSendCdnHdr.SetDestination(m_peerAddress.front());
-               ToSendCdnHdr.SetPort(m_peerPort.front());
+               NS_ASSERT(m_peerAddress.size()==m_peerPort.size());
+               for(int j=0;j<m_peerAddress.size();j++)
+                 {
+                   ToSendCdnHdr.SetDestination(m_peerAddress[j]);
+                   ToSendCdnHdr.SetPort(m_peerPort[j]);
+                 }
              }
-            //ouch haven't added the chunk yet!     
+            //ouch haven't added the chunk yet!  
+            
             packet=GetChunk(cdnhdr.GetReqNumber(),packet);
             packet->AddHeader(ToSendCdnHdr);
             socket->SendTo(packet, 0, from);
@@ -196,13 +201,13 @@ void TonServer::HandleRead (Ptr<Socket> socket)
           {
             
             CdnHeader ToSendCdnHdr;
-            ToSendCdnHdr.SetPort(0);
             ToSendCdnHdr.SetSynType(4);
             Ptr<Packet> ToSendPacket;
             ToSendCdnHdr.SetReqNumber(cdnhdr.GetReqNumber());
             uint32_t reqNum=cdnhdr.GetReqNumber();
             ToSendPacket=GetChunk(reqNum, ToSendPacket);
             ToSendPacket->AddHeader(ToSendCdnHdr);
+            std::cout<<ToSendPacket->GetSize()<<" Packet Size \n";
             socket->SendTo (ToSendPacket, 0, from); 
             return;  
           }

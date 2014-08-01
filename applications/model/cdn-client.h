@@ -187,6 +187,7 @@ private:
   EventId           m_retxEvent;       //!< Retransmission event
   std::map< uint32_t, Ptr<CdnClientSubflow> > subflowmap;
   Time               m_lastOpt;
+  Time               oldReceive;
  
 };
 

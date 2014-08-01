@@ -165,6 +165,9 @@ private:
   uint32_t m_filesize;
   uint32_t m_remfromfile;
   std::vector<Ptr<Socket> > m_socket_list;
+  Time oldReceive;
+  std::map<Ptr<Socket>, Ptr<Packet> > m_halfpackets;
+  uint32_t speed;
 };
 
 } // namespace ns3

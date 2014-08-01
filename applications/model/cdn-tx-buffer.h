@@ -141,7 +141,7 @@ private:
   uint32_t m_size_num;
   uint32_t m_maxBuffer;                         //!< Max number of data bytes in buffer (SND.WND)
   std::list<Ptr<Packet> > m_data;               //!< Corresponding data (may be null)
-  uint32_t m_packetsize;
+  uint64_t m_packetsize;
   std::list <uint32_t> m_datanum;
 };
 

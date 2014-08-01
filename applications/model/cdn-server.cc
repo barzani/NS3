@@ -73,8 +73,8 @@ CdnServer::CdnServer ()
   m_received=0;
   m_state=0;
   m_sent=0;
-  m_filesize=30;
-  m_txBuffer.SetMaxBufferSize (m_filesize);
+  m_filesize=558;
+  m_txBuffer.SetMaxBufferSize (m_filesize+1);
   m_ismain=false;
 }
 
@@ -219,6 +219,7 @@ CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seqTs, S
      }
     case 4:
      {
+       
        Ptr<Packet> ToSendPacket;
        uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
        SeqTsHeader Ack;
@@ -232,6 +233,7 @@ CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seqTs, S
           //this is where i send the response for those packets that I received!.
           ConsumeData();
         }
+
        Ack.SetTs(seqTs.GetTsInt());
        uint32_t reqNum=CdnHdr.GetReqNumber();
        ToSendPacket=GetChunk(reqNum, ToSendPacket);
@@ -241,6 +243,7 @@ CdnServer::ProcessAndHandleReceivedPacket(CdnHeader CdnHdr, SeqTsHeader seqTs, S
        ToSendPacket->AddHeader (packetHdr);
        m_sent++;
        m_socket->SendTo (ToSendPacket, 0, from); 
+     
        return;  
     } 
     default:

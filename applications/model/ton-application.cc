@@ -44,6 +44,9 @@
 #include "ns3/pointer.h"
 #include "cdn-header.h"
 #include <vector>
+#include <iostream>
+#include <fstream>
+
 
 
 NS_LOG_COMPONENT_DEFINE ("TonApplication");
@@ -66,6 +69,10 @@ TonApplication::GetTypeId (void)
     .AddAttribute ("PacketSize", "The size of packets sent in on state",
                    UintegerValue (26044),
                    MakeUintegerAccessor (&TonApplication::m_pktSize),
+                   MakeUintegerChecker<uint32_t> (1))
+    .AddAttribute ("Speed", "Speed of the server, set to -1 if not to be used",
+                   UintegerValue (-1),
+                   MakeUintegerAccessor (&TonApplication::m_speed),
                    MakeUintegerChecker<uint32_t> (1))
     .AddAttribute ("Remote", "The address of the destination",
                    AddressValue (),
@@ -99,6 +106,7 @@ TonApplication::TonApplication ()
   NS_LOG_FUNCTION (this);
   m_pktSize=26044;
   m_nextTxSequence=0;
+  oldReceive=Seconds(0.0);
 }
 
 TonApplication::~TonApplication()
@@ -225,7 +233,7 @@ void TonApplication::StartSending (Ptr<Socket> socket)
   CdnHeader cdnhdr;
   if (m_txBuffer.SizeFromSequence (m_nextTxSequence) && socket!=m_socket)
     {
-      std::cout<<socket<<"socket was \n";
+      std::cout<<"sending "<< m_nextTxSequence<<"\n";
        cdnhdr.SetReqNumber(m_nextTxSequence);
        m_highTxMark= std::max (SequenceNumber32(m_nextTxSequence + 1), m_highTxMark.Get ());   
        m_nextTxSequence++;  
@@ -296,26 +304,69 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
         { //EOF
           break;
         }
+      if((uint32_t)(packet->GetSize())<(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize()))
+       {      
+         
+         if(m_halfpackets.count(socket))
+          {
+            m_halfpackets[socket]->RemoveHeader(cdnhdr);
+            m_halfpackets[socket]->AddAtEnd(packet);
+            m_halfpackets[socket]->AddHeader(cdnhdr);
+            packet=m_halfpackets[socket];
+            if((uint32_t)(packet->GetSize())<(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize()))
+              {
+                continue;
+              }
+            else
+              {
+                packet->PeekHeader(cdnhdr);
+                if((uint32_t)(packet->GetSize()==(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize())))
+                  {
+                    m_halfpackets.erase(socket);
+                  }
+                else
+                  {
+                    Ptr<Packet> temp=packet->CreateFragment(0, m_pktSize-1);
+                    m_halfpackets[socket]=packet->CreateFragment(m_pktSize,packet->GetSize()-m_pktSize);
+                    packet=temp;
+                    NS_ASSERT(((uint32_t)(packet->GetSize()==(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize()))));
+                    
+                  }
+              }
+          }
+         else
+           {
+             m_halfpackets[socket]=packet;
+             continue;
+           }
+       }
+      
       packet->RemoveHeader(cdnhdr);
       
       switch(cdnhdr.GetSynType())
         {
         case 0:
           {
+
             CdnHeader ToSendCdnHdr;
             SeqTsHeader tempack;
             tempack.SetSeq(0);
-            m_filesize=cdnhdr.GetFileSize();
+            m_filesize=30;
+              //cdnhdr.GetFileSize();
+            std::cout<<"file size is "<<m_filesize << "\n";
             m_rxBuffer.SetNextRxSequence(0);
-            if (!m_rxBuffer.Add (packet, tempack))
+            /*  if (!m_rxBuffer.Add (packet, tempack))
               { // Insert failed: No data or RX buffer full
                 NS_ASSERT(0);
                 return;
-              }
-            m_highTxMark=SequenceNumber32(++m_nextTxSequence);
-            m_txBuffer.SetHeadSequence (m_nextTxSequence);
+                }*/
+
+            // m_highTxMark=SequenceNumber32(++m_nextTxSequence);
+            // m_txBuffer.SetHeadSequence (m_nextTxSequence);
+            ProcessAck(packet,cdnhdr);
             PopulateBuffer();
                 //Setup transmission list here, later!.
+            std::cout<<"going in\n";
              SendNextPacketTo(from, socket); 
              if(cdnhdr.GetNumber()!=0)
                {
@@ -328,6 +379,8 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
           }
         default:
           { 
+            //std::cout<<"injast alan dare file size o ava mikone !!!!"<<packet->GetSize()<<"\n";
+
             if(cdnhdr.GetNumber()!=0)
               {
                  for(int j=0; j<cdnhdr.GetNumber(); j++)
@@ -335,7 +388,8 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
                      AddNewSubflow(cdnhdr);
                    }
               }
-            //std::cout<<"i just got "<< cdnhdr.GetReqNumber()<< " next one "<<m_nextTxSequence<< "socket is "<< socket <<"\n";
+            
+            
             ProcessAck(packet,cdnhdr);
             SendNextPacketTo(from, socket);
             break;
@@ -352,14 +406,17 @@ void TonApplication::SendNextPacketTo(Address from, Ptr<Socket> socket)
    */
   if(m_rxBuffer.NextRxSequence ()>=m_filesize)
    {
+     std::cout<<m_rxBuffer.NextRxSequence ()<<"and "<<m_filesize << " file size\n";
      std::cout<<"Finished file transmit! at time "<<(Simulator::Now()).GetSeconds()<< "\n";
      Simulator::Stop();
    }
+  
   if (m_txBuffer.SizeFromSequence (m_nextTxSequence))
    {   
      /**
       * Send this packet on the subflow.
       */
+     
 
      if(!SendDataPacket (from, socket, m_nextTxSequence))
       {
@@ -439,10 +496,17 @@ void TonApplication::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   * We need to get a sequence number
   * for the recieved packet.
   */
+ 
 
+  std::FILE *f;
+  f = std::fopen("ton.txt", "a");
+  fprintf(f, "%f\n",(m_pktSize)/(((Simulator::Now()).GetSeconds()-oldReceive.GetSeconds())*1000.0));
+  fflush(f);
+  oldReceive=Simulator::Now();
   if(p->GetSize()>0)
    {
      SeqTsHeader tempack;
+
      tempack.SetSeq(Ack.GetReqNumber());
      if (!m_rxBuffer.Add (p, tempack))
       { // Insert failed: No data or RX buffer full
@@ -450,6 +514,7 @@ void TonApplication::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
         return;
        }
      Ack.SetReqNumber(m_rxBuffer.NextRxSequence ());
+      
    }
      /** 
      *First have to check if the ack is in sequence!

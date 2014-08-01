@@ -196,9 +196,7 @@ CdnRxBuffer::Add (Ptr<Packet> p, SeqTsHeader& seqTshdr)
     }
   else
     {
-     
-      uint32_t length = tailSeq - headSeq;
-      
+      uint32_t length = tailSeq - headSeq;      
       if(length!=1)
         {
             
