@@ -62,6 +62,11 @@ CdnServer::GetTypeId (void)
                    UintegerValue (1400),
                    MakeUintegerAccessor (&CdnServer::m_chunksize),
                    MakeUintegerChecker<uint16_t> ())
+    .AddAttribute ("Speed", 
+                   "The speed with which the application can send packets ",
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&CdnServer::m_speed),
+                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -73,7 +78,7 @@ CdnServer::CdnServer ()
   m_received=0;
   m_state=0;
   m_sent=0;
-  m_filesize=558;
+  m_filesize=3745;
   m_txBuffer.SetMaxBufferSize (m_filesize+1);
   m_ismain=false;
 }
@@ -288,8 +293,7 @@ void CdnServer::ConsumeData(void)
 {
 }
 
-void
-CdnServer::HandleRead (Ptr<Socket> socket)
+void CdnServer::DoHandleRead(Ptr<Socket> socket)
 {
   NS_LOG_FUNCTION (this << socket);
   Ptr<Packet> packet;
@@ -314,6 +318,20 @@ CdnServer::HandleRead (Ptr<Socket> socket)
           ProcessAndHandleReceivedPacket(cdnhdr, seqTs, AckHdr, packet, from);
           m_received++;
         }
+    }
+}
+
+void
+CdnServer::HandleRead (Ptr<Socket> socket)
+{
+   if(m_speed==(0))
+    {
+      DoHandleRead(socket);
+    }
+  else
+    {   
+      double time=(1400*1.0/m_speed);
+      m_transmit=Simulator::Schedule (Seconds (time), &CdnServer::DoHandleRead, this, socket);
     }
 
 }

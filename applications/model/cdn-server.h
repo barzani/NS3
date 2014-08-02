@@ -112,6 +112,7 @@ private:
   void ProcessAck(SeqTsHeader RecAck);
   void PopulateBuffer(void);
   Ptr<Packet> GetChunk(uint16_t reqnum, Ptr<Packet> packet);
+  void DoHandleRead(Ptr<Socket> socket);
 
 
   /**
@@ -140,7 +141,9 @@ private:
   bool m_ismain;
   std::vector<Address> m_peerAddress; //!< Remote peer address
   std::vector<uint16_t> m_peerPort;
-  
+  uint32_t m_speed;
+  EventId         m_transmit;
+
 };
 
 } // namespace ns3

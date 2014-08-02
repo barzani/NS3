@@ -33,6 +33,7 @@
 #include "ton-server.h"
 #include "cdn-header.h"
 
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("TonServer")
@@ -58,14 +59,14 @@ TonServer::GetTypeId (void)
                      MakeTraceSourceAccessor (&TonServer::m_rxTrace))
     .AddAttribute ("FileSize", 
                    "The total size of the file ",
-                   UintegerValue (30),
+                   UintegerValue (40),
                    MakeUintegerAccessor (&TonServer::m_filesize),
                    MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("Speed", 
                    "The speed with which the application can send packets ",
-                   IntegerValue (-1),
-                   MakeIntegerAccessor (&TonServer::m_speed),
-                   MakeIntegerChecker<uint32_t> ())
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&TonServer::m_speed),
+                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -75,16 +76,19 @@ TonServer::TonServer ()
   NS_LOG_FUNCTION (this);
   m_socket = 0;
   m_totalRx = 0;
-  m_filesize=30;
+  m_filesize=40;
   m_ismain=false;
   m_txBuffer.SetMaxBufferSize (m_filesize+1);
-  m_speed=-1;
   m_chunksize=0;
 }
 
 TonServer::~TonServer()
 {
   NS_LOG_FUNCTION (this);
+  if(m_speed==(0))
+    {
+      m_transmit.Cancel();
+    }
 }
 
 uint32_t TonServer::GetTotalRx () const
@@ -173,6 +177,7 @@ void TonServer::DoHandleRead(Ptr<Socket> socket)
         {
         case 0:
           {
+             
             CdnHeader ToSendCdnHdr;
             m_chunksize=cdnhdr.GetFileSize();
             m_txBuffer.SetSize(m_chunksize);
@@ -202,6 +207,7 @@ void TonServer::DoHandleRead(Ptr<Socket> socket)
             packet=GetChunk(cdnhdr.GetReqNumber(),packet);
             packet->AddHeader(ToSendCdnHdr);
             socket->SendTo(packet, 0, from);
+
             break;
           }
 
@@ -229,17 +235,16 @@ void TonServer::DoHandleRead(Ptr<Socket> socket)
 
 
 void TonServer::HandleRead (Ptr<Socket> socket)
-{
-  if(m_speed==(-1) || m_chunksize==0)
+{ 
+  if(m_speed==(0) || (m_chunksize==0))
     {
       DoHandleRead(socket);
     }
   else
-    {
-      int32_t time=(m_chunksize*1.0/m_speed);
-      Simulator::Schedule (Seconds (time), &TonServer::HandleRead, this, socket);
+    {   
+      double time=(m_chunksize*1.0/m_speed);
+      m_transmit=Simulator::Schedule (Seconds (time), &TonServer::DoHandleRead, this, socket);
     }
- 
 }
 
 void TonServer::HandlePeerClose (Ptr<Socket> socket)

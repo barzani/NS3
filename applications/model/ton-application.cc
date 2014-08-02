@@ -67,7 +67,7 @@ TonApplication::GetTypeId (void)
                    MakeDataRateAccessor (&TonApplication::m_cbrRate),
                    MakeDataRateChecker ())
     .AddAttribute ("PacketSize", "The size of packets sent in on state",
-                   UintegerValue (26044),
+                   UintegerValue (131072),
                    MakeUintegerAccessor (&TonApplication::m_pktSize),
                    MakeUintegerChecker<uint32_t> (1))
     .AddAttribute ("Remote", "The address of the destination",
@@ -100,7 +100,7 @@ TonApplication::TonApplication ()
     m_lastStartTime (Seconds (0))
 {
   NS_LOG_FUNCTION (this);
-  m_pktSize=26044;
+  m_pktSize=131072;
   m_nextTxSequence=0;
   oldReceive=Seconds(0.0);
 }
@@ -229,14 +229,12 @@ void TonApplication::StartSending (Ptr<Socket> socket)
   CdnHeader cdnhdr;
   if (m_txBuffer.SizeFromSequence (m_nextTxSequence) && socket!=m_socket)
     {
-      std::cout<<"sending "<< m_nextTxSequence<<"\n";
        cdnhdr.SetReqNumber(m_nextTxSequence);
        m_highTxMark= std::max (SequenceNumber32(m_nextTxSequence + 1), m_highTxMark.Get ());   
        m_nextTxSequence++;  
     }
   else
     {
-       std::cout<<socket<<"main socket was \n";
       cdnhdr.SetReqNumber(0);
     }
   cdnhdr.SetSynType(0);
@@ -300,15 +298,17 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
         { //EOF
           break;
         }
+      
       if((uint32_t)(packet->GetSize())<(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize()))
        {      
-         
+     
          if(m_halfpackets.count(socket))
           {
             m_halfpackets[socket]->RemoveHeader(cdnhdr);
             m_halfpackets[socket]->AddAtEnd(packet);
             m_halfpackets[socket]->AddHeader(cdnhdr);
             packet=m_halfpackets[socket];
+            
             if((uint32_t)(packet->GetSize())<(uint32_t)(m_pktSize+cdnhdr.GetSerializedSize()))
               {
                 continue;
@@ -347,9 +347,7 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
             CdnHeader ToSendCdnHdr;
             SeqTsHeader tempack;
             tempack.SetSeq(0);
-            m_filesize=30;
-              //cdnhdr.GetFileSize();
-            std::cout<<"file size is "<<m_filesize << "\n";
+            m_filesize=cdnhdr.GetFileSize();
             m_rxBuffer.SetNextRxSequence(0);
             /*  if (!m_rxBuffer.Add (packet, tempack))
               { // Insert failed: No data or RX buffer full
@@ -385,8 +383,10 @@ void TonApplication::HandleRead (Ptr<Socket> socket)
                    }
               }
             
-            
+           
             ProcessAck(packet,cdnhdr);
+            
+
             SendNextPacketTo(from, socket);
             break;
           }
@@ -492,16 +492,16 @@ void TonApplication::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   * We need to get a sequence number
   * for the recieved packet.
   */
- 
-
   std::FILE *f;
   f = std::fopen("ton.txt", "a");
   fprintf(f, "%f\n",(m_pktSize)/(((Simulator::Now()).GetSeconds()-oldReceive.GetSeconds())*1000.0));
   fflush(f);
   oldReceive=Simulator::Now();
+  fclose(f);
   if(p->GetSize()>0)
    {
      SeqTsHeader tempack;
+     std::cout<<"got "<<Ack.GetReqNumber()<<"\n";
      tempack.SetSeq(Ack.GetReqNumber());
      if (!m_rxBuffer.Add (p, tempack))
       { // Insert failed: No data or RX buffer full

@@ -110,6 +110,7 @@ private:
   uint32_t        m_chunksize;    //!< Size of each chunk of data that is going to be served.
   CdnTxBuffer     m_txBuffer;     //!< Transmit buffer.
   bool            m_ismain;
+  EventId         m_transmit;
   
 std::vector<Address> m_peerAddress; //!< Remote peer address
  std::vector<uint16_t> m_peerPort;

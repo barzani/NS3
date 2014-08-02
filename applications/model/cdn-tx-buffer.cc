@@ -53,7 +53,7 @@ CdnTxBuffer::GetTypeId (void)
  * initialized below is insignificant.
  */
 CdnTxBuffer::CdnTxBuffer (uint32_t n)
-  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (1000), m_data (0), m_packetsize(26044)
+  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (10000), m_data (0), m_packetsize(1400)
 {
 }
 
@@ -226,6 +226,7 @@ uint32_t CdnTxBuffer::ReturnMaxPossible(uint32_t numBytes, const uint32_t& seq)
 Ptr<Packet>
 CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
 {
+
   NS_LOG_FUNCTION (this << numBytes << seq);
   uint32_t s = std::min (numBytes, (seq)); // Real size to extract. Insure not beyond end of data
   
@@ -238,7 +239,6 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
     { // No actual data, just return dummy-data packet of correct size
       return Create<Packet> (0);
     }
-
   // Extract data from the buffer and return
   uint32_t offset = seq - m_firstByteSeq.Get ();
 
@@ -250,20 +250,16 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
   NS_LOG_LOGIC ("There are " << m_data.size () << " number of packets in buffer");
   for (BufIterator i = m_data.begin (); i != m_data.end (); ++i)
     {
-      
+        
       pktCount++;
       pktSize = (*i)->GetSize ();
-
       if (!beginFound)
-        { // Look for first fragment
-          // std::cout<< "count is "<<count << "offset " << offset << "result "<< (count>offset) << "" "\n";
+        { 
           if (count+1  > offset)
-            {
-              
+            {              
               NS_LOG_LOGIC ("First byte found in packet #" << pktCount << " at buffer offset " << count
-                                                           << ", packet len=" << pktSize);
+                                                       << ", packet len=" << pktSize);
               beginFound = true;
-               
               uint32_t packetOffset = offset - count;
               uint32_t fragmentLength = count + 1 - offset;
               if (fragmentLength >= s)
@@ -276,9 +272,7 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
                   outPacket = (* i)->CreateFragment (packetOffset, fragmentLength*m_packetsize);
                 }
               NS_LOG_LOGIC ("Output packet is now of size " << outPacket->GetSize ());
-            } 
-
-          
+            }          
         }
       else if (count + 1 >= offset + s)
         { // Last packet fragment found
@@ -302,7 +296,6 @@ CdnTxBuffer::CopyFromSequence (uint32_t numBytes, const uint32_t& seq)
     }
 
   NS_ASSERT (outPacket->GetSize () == s*m_packetsize); //I tried putting a printf before and after it and the thing would crash before. 
-
   return outPacket;
 }
 
