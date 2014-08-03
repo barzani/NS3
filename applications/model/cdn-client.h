@@ -129,7 +129,7 @@ private:
   void NewAck (const SequenceNumber32& seq);
   void DoNewAck (const SequenceNumber32& seq);
   uint32_t ChunksInFlight ();
-  void SetSubflowrWnds();
+  void SetSubflowrWnds(bool inc);
   void AddNewSubflow(CdnHeader ack);
 
   

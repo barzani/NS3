@@ -49,7 +49,7 @@ CdnRxBuffer::GetTypeId (void)
  * initialized below is insignificant.
  */
 CdnRxBuffer::CdnRxBuffer (uint32_t n)
-  : m_nextRxSeq (n), m_gotFin (false), m_size (0), m_maxBuffer (32768), m_availBytes (0)
+  : m_nextRxSeq (n), m_gotFin (false), m_size (0), m_maxBuffer (3276800), m_availBytes (0)
 {
 
 }

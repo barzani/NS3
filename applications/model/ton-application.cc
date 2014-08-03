@@ -494,7 +494,7 @@ void TonApplication::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   */
   std::FILE *f;
   f = std::fopen("ton.txt", "a");
-  fprintf(f, "%f\n",(m_pktSize)/(((Simulator::Now()).GetSeconds()-oldReceive.GetSeconds())*1000.0));
+  fprintf(f, "%f\n",(m_pktSize)/(((Simulator::Now()).GetSeconds()-oldReceive.GetSeconds())*1024.0));
   fflush(f);
   oldReceive=Simulator::Now();
   fclose(f);

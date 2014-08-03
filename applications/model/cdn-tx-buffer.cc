@@ -53,7 +53,7 @@ CdnTxBuffer::GetTypeId (void)
  * initialized below is insignificant.
  */
 CdnTxBuffer::CdnTxBuffer (uint32_t n)
-  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (10000), m_data (0), m_packetsize(1400)
+  : m_firstByteSeq (n), m_size (0),m_size_num(0), m_maxBuffer (100000), m_data (0), m_packetsize(1400)
 {
 }
 

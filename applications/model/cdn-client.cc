@@ -68,7 +68,7 @@ CdnClient::GetTypeId (void)
                    MakeUintegerAccessor (&CdnClient::m_peerPort),
                    MakeUintegerChecker<uint16_t> ())
     .AddAttribute ("ReTxThreshold", "Threshold for fast retransmit",
-                    UintegerValue (10),
+                    UintegerValue (20),
                     MakeUintegerAccessor (&CdnClient::m_retxThresh),
                     MakeUintegerChecker<uint32_t> ())
        .AddAttribute ("LimitedTransmit", "Enable limited transmit",
@@ -92,7 +92,7 @@ CdnClient::CdnClient ()
   m_initialCWnd=2;
   m_cnCount=3;
   m_cnTimeout=Seconds(0.2);
-  m_rto=Seconds(0.6);
+  m_rto=Seconds(1);
   m_lastOpt=Seconds(0.0);
 }
 
@@ -297,7 +297,7 @@ void  CdnClient::RcvBufOptimization(bool penal)
     {
       return;
     }
-  if(Simulator::Now()-m_lastOpt>=(subflow->GetRTT()/8))
+  if(Simulator::Now()-m_lastOpt>=(subflow->GetRTT())/8)
     {
      
      for(it=m_subflowList.begin(); it!=m_subflowList.end(); it++)
@@ -354,6 +354,7 @@ CdnClient::SendWhatPossible()
      /**
       * Send this packet on the subflow.
       */
+     
      if(!SendDataPacket (subflow,m_nextTxSequence, s))
       {
         nPacketsSent++;                            // Count sent this loop
@@ -427,6 +428,7 @@ CdnClient::SendDataPacket(Ptr<CdnClientSubflow> subflow, uint32_t seq, uint32_t 
  NS_LOG_FUNCTION (this);
  if(subflow==NULL)
    {
+     // std::cout<<"inja hastam!\n";
      return 1;
    }
  int32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
@@ -474,6 +476,9 @@ CdnClient::UnAckDataCount (void)
 void 
 CdnClient::ConsumeData(void)
 {
+  m_rxBuffer.Extract (1);
+  SetSubflowrWnds(true);
+  
 }
 
   /**
@@ -497,8 +502,10 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
   * We need to get a sequence number
   * for the recieved packet.
   */
+
   if(p->GetSize()>0)
-   {
+    {
+      //std::cout<<"got an ack for "<< Ack.GetReqNumber()<<"!!!!!!!!!!!!!!!\n";
      SeqTsHeader tempack;     
      tempack.SetSeq(Ack.GetReqNumber());
      if (m_rxBuffer.Add (p, tempack))
@@ -509,14 +516,15 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
         fflush(f);
         oldReceive=Simulator::Now(); 
         std::fclose(f);
+        ConsumeData();
       }
      else
        {
-       }
-    
+       }    
      Ack.SetReqNumber(m_rxBuffer.NextRxSequence ());
+     // ;
    }
-
+  //std::cout<<"got an ack for in clinet"<< Ack.GetReqNumber()<<"\n";
      /** 
      *First have to check if the ack is in sequence!
      * will have to change this later, to reflect multiple subflows.
@@ -538,16 +546,18 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
    else if (Ack.GetReqNumber () > m_txBuffer.HeadSequence ())
     { // Case 3: New ACK, reset m_dupAckCount and update m_txBuffer
       NS_LOG_LOGIC ("New ack of " << Ack.GetReqNumber ());
-      
+      m_dupAckCount = 0;
+       uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
+       if (expectedSeq < m_rxBuffer.NextRxSequence ())
+       {
+         ConsumeData();
+       }
+      NewAck (SequenceNumber32(Ack.GetReqNumber ()));
+   
+   SetSubflowrWnds(false);
     }
-   uint32_t expectedSeq = m_rxBuffer.NextRxSequence ();
-   if (expectedSeq < m_rxBuffer.NextRxSequence ())
-     {
-       ConsumeData();
-     }
-   NewAck (SequenceNumber32(Ack.GetReqNumber ()));
-   m_dupAckCount = 0;
-   SetSubflowrWnds();
+  
+   
 }
 
   /**
@@ -556,10 +566,22 @@ CdnClient::ProcessAck(Ptr<Packet> p, CdnHeader Ack)
    * pointer instead!.
    */
 void  
-CdnClient::SetSubflowrWnds()
+CdnClient::SetSubflowrWnds(bool inc)
 {
   NS_LOG_FUNCTION (this);
-  m_rWnd--;
+  if(inc)
+    {
+      m_rWnd++;
+    }
+  else
+    {
+      if(m_rWnd==0)
+        {
+          return;
+        }
+      m_rWnd--;
+     
+    }
   std::vector<Ptr<CdnClientSubflow> >::iterator it;
   for(it=m_subflowList.begin(); it!=m_subflowList.end(); it++)
    {
@@ -579,7 +601,9 @@ CdnClient::DupAck (const CdnHeader& t, uint32_t count)
    NS_LOG_FUNCTION (this << count);
   if (count == m_retxThresh)
     { // retransmit packet on another subflow if necessary. 
+      //std::cout<<"UMADAM INJA!\n";
       DoRetransmit ();
+      m_dupAckCount = 0;
     }
   else if (m_limitedTx && m_txBuffer.SizeFromSequence (m_nextTxSequence) > 0)
     { // RFC3042 Limited transmit: Send a new packet for each duplicated ACK before fast retransmit
@@ -605,7 +629,7 @@ CdnClient::NewAck (const SequenceNumber32& seq)
   uint32_t ack=seq.GetValue();
   if(ack==(m_filesize+1))
    {
-     std::cout<<"file completely served!\n";
+     std::cout<<"Done sending this "<<(Simulator::Now()).GetSeconds()<< "\n";
      Simulator::Stop();
    }
   NS_LOG_LOGIC (this << " Cancelled ReTxTimeout event which was set to expire at " <<
@@ -672,6 +696,10 @@ CdnClient::DoRetransmit ()
   SendDataPacket (subflow, m_txBuffer.HeadSequence (), 1);
   // In case of RTO, advance m_nextTxSequence
   m_nextTxSequence = std::max (m_nextTxSequence.Get (), m_txBuffer.HeadSequence () + 1); 
+  NS_LOG_LOGIC (this << " SendDataPacket Schedule ReTxTimeout at time " <<
+                    Simulator::Now ().GetSeconds () << " to expire at time " <<
+                    (Simulator::Now () + m_rto.Get ()).GetSeconds () );
+      m_retxEvent = Simulator::Schedule (m_rto*8, &CdnClient::ReTxTimeout, this);
 }
 
   /**
@@ -684,7 +712,6 @@ CdnClient::Retransmit (void)
   NS_LOG_LOGIC (this << " ReTxTimeout Expired at time " << Simulator::Now ().GetSeconds ());
   // If all data are received (non-closing socket and nothing to send), just return
   if (SequenceNumber32(m_txBuffer.HeadSequence () )>= m_highTxMark) return;
-  m_nextTxSequence = m_txBuffer.HeadSequence (); // Restart from highest Ack
   DoRetransmit ();                          // Retransmit the packet
 }
 void 

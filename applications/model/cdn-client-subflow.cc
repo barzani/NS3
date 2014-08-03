@@ -90,7 +90,7 @@ CdnClientSubflow::GetTypeId (void)
   m_socket = 0;
   m_sendEvent = EventId ();
   m_filesize=0;
-  m_rWnd=1000;
+  m_rWnd=2000;
   m_chunksize=1400; //right now this value is hardcoded, change later.
   m_initialCWnd=2;
   m_cnCount=3;
@@ -248,7 +248,6 @@ CdnClientSubflow::Send (uint32_t syntype)
 
 void CdnClientSubflow::HalfWindow(void)
 {
-  
   m_cWnd=(m_cWnd/2.0);
   if(m_cWnd<2)
     {
@@ -334,7 +333,6 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                  * In its response.*/
                 if(m_state==0)
                   {
-                    
 		    m_filesize=cdnhdr.GetFileSize();
                     m_state=2;
                     m_highTxMark=SequenceNumber32(++m_nextTxSequence);
@@ -344,8 +342,13 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                     //ProcessAck(AckHdr);
                     if(m_ismain)
                       {
-                        
-		         m_parent->PopulateBuffer(cdnhdr);
+         	         m_parent->PopulateBuffer(cdnhdr);
+                      }
+                    else
+                      {
+                        m_parent->SendWhatPossible();
+
+
                       }
                   }
                 break;
@@ -360,9 +363,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
               {
                 
                 if(AckHdr.GetSeq()!=(-1))
-                  {
-             
-                    
+                  {              
                     EstimateRTT(AckHdr);      
                      if (packet->GetSize ()
                       && OutOfRange (AckHdr.GetSeq (), AckHdr.GetSeq () + 1))
@@ -371,12 +372,8 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
                      }
                      
                     ProcessAck(packet,AckHdr);
-                    //remember to send up the packet to the upper layer!.
-                    
-
-                    m_parent->ProcessAck(packet,cdnhdr);
-                   
-
+                    //remember to send up the packet to the upper layer!;
+                    m_parent->ProcessAck(packet,cdnhdr);                 
                   }
                 return;
 
@@ -429,7 +426,7 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
       {
             if(m_txBuffer.Size () == 0)
               {
-                std::cout<<"nothing to send\n";
+                std::cout<<"nothing to send"<<this<<"\n";
               }
             else
               {
@@ -469,9 +466,11 @@ CdnClientSubflow::HandleRead (Ptr<Socket> socket)
       uint32_t s = std::min(w, packetsize);  // Send no more than window
 
       /*we are */
-      SendDataPacket (m_nextTxSequence, s);
-      nPacketsSent++;                             // Count sent this loop
-      m_nextTxSequence += 1;                     // Advance next tx sequence   
+      if(SendDataPacket (m_nextTxSequence, s))
+        {
+          nPacketsSent++;                             // Count sent this loop
+          m_nextTxSequence += 1;
+        }// Advance next tx sequence   
   }
 }
   Ptr<Packet> CdnClientSubflow::GetChunk(uint16_t reqnum, Ptr<Packet> packet)
@@ -491,6 +490,7 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
 /* I think this is also wrong. */
   uint32_t CdnClientSubflow::SendDataPacket(uint32_t seq, uint32_t maxSize)
   {
+
     NS_LOG_FUNCTION (this);
       
     uint32_t num=m_txBuffer.ReturnMaxPossible(maxSize, seq);
@@ -502,7 +502,8 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
    
     /*Packet header containing the sequence number and time stamp.*/
     SeqTsHeader seqTs; 
-   
+    uint32_t count;
+    count=0;
     if (m_retxEvent.IsExpired () )
     { // Schedule retransmit
       m_rto = m_rtt->RetransmitTimeout ();
@@ -529,12 +530,12 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
         m_rto = m_rtt->RetransmitTimeout ();
         if ((m_socket->Send (p)) >= 0)
         {
-
           seq++;
+          count++;
         }
       }
-  
-    return 0;
+
+    return count;
   }
   uint32_t CdnClientSubflow::AvailableWindow(void)
   {
@@ -547,8 +548,8 @@ void CdnClientSubflow::SetRwnd(uint32_t rWnd)
   
   uint32_t CdnClientSubflow::Window (void)
   {
-    
-   return std::min (m_rWnd.Get (), m_cWnd.Get ());;
+    //  std::cout<<"this is rwnd "<<this<<" "<<std::min (m_rWnd.Get (), m_cWnd.Get ())<<"rwnd is "<<m_rWnd.Get ()<< "cwnd is "<<m_cWnd.Get ()<<"\n";
+   return std::min (m_rWnd.Get (), m_cWnd.Get ());
   }
   uint32_t
  CdnClientSubflow::UnAckDataCount (void)
@@ -600,7 +601,7 @@ void CdnClientSubflow::ProcessAck(Ptr<Packet> p, SeqTsHeader Ack)
           ConsumeData();
         }
       NewAck (SequenceNumber32(Ack.GetSeq ()));
-      m_dupAckCount = 0;
+      m_dupAckCount = 0; 
     }
   }
 //Following the newreno policy! 
@@ -612,7 +613,6 @@ void CdnClientSubflow::DupAck (const SeqTsHeader& t, uint32_t count)
    NS_LOG_FUNCTION (this << count);
   if (count == m_retxThresh && !m_inFastRec)
     { // triple duplicate ack triggers fast retransmit (RFC2582 sec.3 bullet #1)
-      
       m_ssThresh = std::max ((uint32_t)2, ChunksInFlight () / 2);
       m_cWnd = m_ssThresh + 3 ;
       m_recover = m_highTxMark;
@@ -636,12 +636,8 @@ void CdnClientSubflow::DupAck (const SeqTsHeader& t, uint32_t count)
 void CdnClientSubflow::NewAck (const SequenceNumber32& seq)
 {
         NS_LOG_FUNCTION (this);
-        uint32_t ack=seq.GetValue();
-        if(ack==(m_filesize+1))
-        {
-          std::cout<<"file completely served!\n";
-          //Simulator::Stop();
-        }
+      
+
       NS_LOG_LOGIC (this << " Cancelled ReTxTimeout event which was set to expire at " <<
                     (Simulator::Now () + Simulator::GetDelayLeft (m_retxEvent)).GetSeconds ());
       m_retxEvent.Cancel ();
